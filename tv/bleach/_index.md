@@ -7,7 +7,7 @@ deskripsi: >-
   sebagai Hollows, dia menemukan hidupnya berubah selamanya. Sekarang, dengan
   kekayaan energi spiritual yang baru ditemukan, Ichigo menemukan panggilan
   sejatinya: untuk melindungi yang hidup dan yang mati dari kejahatan.
-image_url: 'https://image.tmdb.org/t/p/w1280/d8pipPG6EEvqFu1KnHvCk0xMALV.jpg'
+image_url: 'https://image.tmdb.org/t/p/w1280/Ng6JBor5Mmt0GzDyWWuDvqa7pj.jpg'
 rating: 8.4
 featured: true
 ---
