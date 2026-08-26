@@ -18,6 +18,7 @@ import VideoPlayer from '@/components/VideoPlayer';
 import ShareButton from '@/components/ShareButton';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
 import { CustomSeason, CustomEpisode } from '@/lib/markdownTV';
+import { useAuth } from '@/context/AuthContext';
 import siteConfig from '@/config';
 
 interface TVDetailHeaderActionsProps {
@@ -27,14 +28,30 @@ interface TVDetailHeaderActionsProps {
   trailerKey?: string | null;
   homepage?: string | null;
   showTitle: string;
+  showId?: string | number;
+  posterPath?: string | null;
 }
 
 export function TVDetailHeaderActions({
   trailerKey,
   showTitle,
+  showId,
+  posterPath,
 }: TVDetailHeaderActionsProps) {
   const [showTrailer, setShowTrailer] = useState(false);
-  const [bookmarked, setBookmarked] = useState(false);
+  const { toggleWatchlist, isInWatchlist } = useAuth();
+
+  const itemId = showId || showTitle;
+  const isSaved = isInWatchlist(itemId);
+
+  const handleWatchlistClick = () => {
+    toggleWatchlist({
+      id: itemId,
+      title: showTitle,
+      posterPath: posterPath || null,
+      type: 'tv',
+    });
+  };
 
   return (
     <>
@@ -56,18 +73,18 @@ export function TVDetailHeaderActions({
 
         {/* Bookmark / Watchlist */}
         <button
-          onClick={() => setBookmarked(!bookmarked)}
+          onClick={handleWatchlistClick}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-200 hover:scale-105 active:scale-95"
           style={{
-            background: bookmarked ? 'rgba(236,72,153,0.18)' : 'rgba(255,255,255,0.06)',
-            border: bookmarked
+            background: isSaved ? 'rgba(236,72,153,0.18)' : 'rgba(255,255,255,0.06)',
+            border: isSaved
               ? '1px solid rgba(236,72,153,0.5)'
               : '1px solid rgba(255,255,255,0.1)',
-            color: bookmarked ? '#ec4899' : '#f1f5f9',
+            color: isSaved ? '#ec4899' : '#f1f5f9',
           }}
         >
-          <Bookmark size={16} fill={bookmarked ? 'currentColor' : 'none'} />
-          <span>{bookmarked ? 'Saved in Watchlist' : 'Add to Watchlist'}</span>
+          <Bookmark size={16} fill={isSaved ? 'currentColor' : 'none'} />
+          <span>{isSaved ? 'Saved in Watchlist' : 'Add to Watchlist'}</span>
         </button>
 
         {/* Share Button */}

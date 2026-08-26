@@ -440,6 +440,8 @@ export default async function TVShowPage({ params }: PageProps) {
                       trailerKey={trailerKey}
                       homepage={data.homepage}
                       showTitle={data.name}
+                      showId={data.id}
+                      posterPath={data.poster_path}
                     />
                   </div>
                 </div>

@@ -341,6 +341,8 @@ export default async function MovieDetailPage({ params }: PageProps) {
 
             <MovieDetailClient
               movieTitle={movie.title}
+              movieId={movie.id}
+              posterPath={movie.poster_path}
               trailerKey={trailerKey}
               homepage={movie.homepage}
               hasCustomVideo={Boolean(movie.customVideoUrl)}
@@ -460,6 +462,8 @@ export default async function MovieDetailPage({ params }: PageProps) {
                 <div className="flex justify-center md:justify-start">
                   <MovieDetailClient
                     movieTitle={movie.title}
+                    movieId={movie.id}
+                    posterPath={movie.poster_path}
                     trailerKey={trailerKey}
                     homepage={movie.homepage}
                     hasCustomVideo={Boolean(movie.customVideoUrl)}

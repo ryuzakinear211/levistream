@@ -5,9 +5,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Film, Home, Tv, Search, ChevronDown, ChevronRight,
-  TrendingUp, Star, Clock, Clapperboard, Flame, Menu, X
+  TrendingUp, Star, Clock, Clapperboard, Flame, Menu, X, LogIn
 } from 'lucide-react';
 import { Genre } from '@/types/tmdb';
+import { useAuth } from '@/context/AuthContext';
 import siteConfig from '@/config';
 
 interface SidebarProps {
@@ -17,6 +18,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ genres = [], isOpen, onToggle }: SidebarProps) {
+  const { user } = useAuth();
   const pathname = usePathname();
   const [genreExpanded, setGenreExpanded] = useState(false);
 
@@ -280,6 +282,67 @@ export default function Sidebar({ genres = [], isOpen, onToggle }: SidebarProps)
               </div>
             )}
           </div>
+        )}
+      </div>
+
+      {/* ── SIDEBAR FOOTER (DESKTOP LOGIN & ACCOUNT) ── */}
+      <div
+        className="border-t border-white/[0.06] flex-shrink-0"
+        style={{
+          padding: isOpen ? '12px' : '10px 0',
+          background: 'rgba(255, 255, 255, 0.02)',
+        }}
+      >
+        {!isOpen ? (
+          <div className="flex justify-center">
+            <Link
+              href="/login"
+              title={user ? user.username : 'Masuk / Akun'}
+              className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 text-cyan-400 hover:scale-105 active:scale-95"
+              style={{
+                background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.18), rgba(124, 58, 237, 0.22))',
+                border: '1px solid rgba(6, 182, 212, 0.45)',
+                boxShadow: '0 0 15px rgba(6, 182, 212, 0.2)',
+              }}
+            >
+              {user ? (
+                <span className="font-black text-xs text-white">
+                  {user.username.charAt(0).toUpperCase()}
+                </span>
+              ) : (
+                <LogIn size={18} />
+              )}
+            </Link>
+          </div>
+        ) : (
+          <Link
+            href="/login"
+            className="w-full flex items-center gap-3 p-2.5 rounded-2xl transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+            style={{
+              background:
+                'linear-gradient(135deg, rgba(6, 182, 212, 0.16) 0%, rgba(124, 58, 237, 0.22) 100%)',
+              border: '1px solid rgba(6, 182, 212, 0.45)',
+              boxShadow: '0 0 20px rgba(6, 182, 212, 0.15)',
+            }}
+          >
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 font-black text-sm text-white"
+              style={{
+                background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
+                boxShadow: '0 0 12px rgba(6, 182, 212, 0.35)',
+              }}
+            >
+              {user ? user.username.charAt(0).toUpperCase() : <LogIn size={16} />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-white truncate">
+                {user ? user.username : 'Masuk / Daftar'}
+              </p>
+              <p className="text-[10px] font-medium text-cyan-300 truncate">
+                {user ? 'Kelola Akun' : 'Buka Akses Watchlist'}
+              </p>
+            </div>
+          </Link>
         )}
       </div>
     </aside>

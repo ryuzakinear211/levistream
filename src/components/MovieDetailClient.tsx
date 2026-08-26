@@ -4,9 +4,12 @@ import React, { useState } from 'react';
 import { Bookmark, Film } from 'lucide-react';
 import TrailerModal from '@/components/TrailerModal';
 import ShareButton from '@/components/ShareButton';
+import { useAuth } from '@/context/AuthContext';
 
 interface MovieDetailClientProps {
   movieTitle: string;
+  movieId?: string | number;
+  posterPath?: string | null;
   trailerKey?: string | null;
   homepage?: string | null;
   hasCustomVideo?: boolean;
@@ -14,10 +17,24 @@ interface MovieDetailClientProps {
 
 export default function MovieDetailClient({
   movieTitle,
+  movieId,
+  posterPath,
   trailerKey,
 }: MovieDetailClientProps) {
   const [showTrailer, setShowTrailer] = useState(false);
-  const [bookmarked, setBookmarked] = useState(false);
+  const { toggleWatchlist, isInWatchlist } = useAuth();
+
+  const itemId = movieId || movieTitle;
+  const isSaved = isInWatchlist(itemId);
+
+  const handleWatchlistClick = () => {
+    toggleWatchlist({
+      id: itemId,
+      title: movieTitle,
+      posterPath: posterPath || null,
+      type: 'movie',
+    });
+  };
 
   return (
     <>
@@ -37,20 +54,20 @@ export default function MovieDetailClient({
           </button>
         )}
 
-        {/* Bookmark Button */}
+        {/* Bookmark / Watchlist Button */}
         <button
-          onClick={() => setBookmarked(!bookmarked)}
+          onClick={handleWatchlistClick}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-200 hover:scale-105 active:scale-95"
           style={{
-            background: bookmarked ? 'rgba(6,182,212,0.18)' : 'rgba(255,255,255,0.06)',
-            border: bookmarked
+            background: isSaved ? 'rgba(6,182,212,0.18)' : 'rgba(255,255,255,0.06)',
+            border: isSaved
               ? '1px solid rgba(6,182,212,0.5)'
               : '1px solid rgba(255,255,255,0.1)',
-            color: bookmarked ? '#06b6d4' : '#f1f5f9',
+            color: isSaved ? '#06b6d4' : '#f1f5f9',
           }}
         >
-          <Bookmark size={16} fill={bookmarked ? 'currentColor' : 'none'} />
-          <span>{bookmarked ? 'Saved' : 'Watchlist'}</span>
+          <Bookmark size={16} fill={isSaved ? 'currentColor' : 'none'} />
+          <span>{isSaved ? 'Saved' : 'Watchlist'}</span>
         </button>
 
         {/* Share Button */}

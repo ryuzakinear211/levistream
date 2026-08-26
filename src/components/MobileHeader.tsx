@@ -21,6 +21,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { Genre } from '@/types/tmdb';
+import { useAuth } from '@/context/AuthContext';
 import siteConfig from '@/config';
 
 interface MobileHeaderProps {
@@ -28,6 +29,7 @@ interface MobileHeaderProps {
 }
 
 export default function MobileHeader({ genres = [] }: MobileHeaderProps) {
+  const { user } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -135,8 +137,8 @@ export default function MobileHeader({ genres = [] }: MobileHeaderProps) {
         {/* Right: Login Button FIRST, followed by Hamburger Menu at the far right */}
         <div className="flex items-center gap-2 sm:gap-2.5">
           {/* Distinctive Glassmorphic Login Button */}
-          <button
-            type="button"
+          <Link
+            href="/login"
             className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold text-cyan-300 transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5"
             style={{
               background:
@@ -145,9 +147,20 @@ export default function MobileHeader({ genres = [] }: MobileHeaderProps) {
               boxShadow: '0 0 18px rgba(6, 182, 212, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
             }}
           >
-            <LogIn size={13} className="text-cyan-400" />
-            <span>Login</span>
-          </button>
+            {user ? (
+              <>
+                <div className="w-4 h-4 rounded-full bg-cyan-400 text-black font-black text-[10px] flex items-center justify-center">
+                  {user.username.charAt(0).toUpperCase()}
+                </div>
+                <span className="max-w-[70px] truncate">{user.username}</span>
+              </>
+            ) : (
+              <>
+                <LogIn size={13} className="text-cyan-400" />
+                <span>Login</span>
+              </>
+            )}
+          </Link>
 
           {/* Hamburger Menu Toggle Button (Far Right) */}
           <button
