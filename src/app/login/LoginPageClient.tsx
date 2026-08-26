@@ -169,7 +169,7 @@ export default function LoginPageClient() {
   // If user is already logged in, show profile card with logout option
   if (user) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6" style={{ background: '#050816' }}>
+      <div className="w-full min-h-[calc(100vh-14rem)] flex items-center justify-center px-4 py-8 sm:py-12">
         <div
           className="w-full max-w-[380px] rounded-3xl p-6 sm:p-8 text-center"
           style={{
@@ -218,23 +218,11 @@ export default function LoginPageClient() {
   }
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center p-4 sm:p-6" style={{ background: '#050816' }}>
-      {/* ── Ambient Background Glows ── */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+    <div className="w-full min-h-[calc(100vh-14rem)] flex items-center justify-center px-4 py-8 sm:py-12">
+      {/* ── Main Form Card (Fit Size without excessive empty space) ── */}
+      <div className="relative z-10 w-full max-w-[420px]">
         <div
-          className="absolute top-1/4 -left-20 w-80 h-80 rounded-full blur-[120px] opacity-20"
-          style={{ background: '#06b6d4' }}
-        />
-        <div
-          className="absolute bottom-1/4 -right-20 w-80 h-80 rounded-full blur-[120px] opacity-20"
-          style={{ background: '#7c3aed' }}
-        />
-      </div>
-
-      {/* ── Main Form Card ── */}
-      <div className="relative z-10 w-full max-w-[400px]">
-        <div
-          className="rounded-3xl p-6 sm:p-7 transition-all duration-300"
+          className="rounded-3xl p-6 sm:p-8 transition-all duration-300"
           style={{
             background: 'rgba(9, 14, 32, 0.94)',
             backdropFilter: 'blur(30px) saturate(190%)',
@@ -304,7 +292,7 @@ export default function LoginPageClient() {
                           clearFieldError('forgotEmail');
                         }}
                         placeholder="Masukkan Email Anda"
-                        className={`w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                        className={`w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
                           errors.forgotEmail
                             ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
                             : 'border border-white/15 focus:border-cyan-400'
@@ -355,13 +343,13 @@ export default function LoginPageClient() {
                     setTab('login');
                     setErrors({});
                   }}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all duration-200 ${
+                  className={`flex-1 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all duration-200 ${
                     tab === 'login'
                       ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white shadow-md'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  <LogIn size={13} />
+                  <LogIn size={14} />
                   <span>Masuk</span>
                 </button>
 
@@ -371,23 +359,23 @@ export default function LoginPageClient() {
                     setTab('register');
                     setErrors({});
                   }}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all duration-200 ${
+                  className={`flex-1 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all duration-200 ${
                     tab === 'register'
                       ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white shadow-md'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  <UserPlus size={13} />
+                  <UserPlus size={14} />
                   <span>Daftar</span>
                 </button>
               </div>
 
               {/* ── TAB 1: LOGIN ── */}
               {tab === 'login' && (
-                <form onSubmit={handleLoginSubmit} className="space-y-3.5">
+                <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div className="space-y-1">
                     <div className="relative">
-                      <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type="text"
                         value={loginIdentifier}
@@ -396,7 +384,7 @@ export default function LoginPageClient() {
                           clearFieldError('loginIdentifier');
                         }}
                         placeholder="Username/Email"
-                        className={`w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                        className={`w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none transition-colors ${
                           errors.loginIdentifier
                             ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
                             : 'border border-white/15 focus:border-cyan-400'
@@ -413,7 +401,7 @@ export default function LoginPageClient() {
 
                   <div className="space-y-1">
                     <div className="relative">
-                      <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type={showPassword ? 'text' : 'password'}
                         value={loginPassword}
@@ -422,7 +410,7 @@ export default function LoginPageClient() {
                           clearFieldError('loginPassword');
                         }}
                         placeholder="Password"
-                        className={`w-full pl-9 pr-9 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                        className={`w-full pl-10 pr-10 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none transition-colors ${
                           errors.loginPassword
                             ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
                             : 'border border-white/15 focus:border-cyan-400'
@@ -433,7 +421,7 @@ export default function LoginPageClient() {
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
                       >
-                        {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
                     {errors.loginPassword && (
@@ -445,7 +433,7 @@ export default function LoginPageClient() {
                   </div>
 
                   <div className="flex items-center justify-between text-xs pt-0.5">
-                    <label className="flex items-center gap-2 cursor-pointer text-slate-300 text-[11px]">
+                    <label className="flex items-center gap-2 cursor-pointer text-slate-300 text-xs">
                       <input
                         type="checkbox"
                         checked={rememberMe}
@@ -461,7 +449,7 @@ export default function LoginPageClient() {
                         setForgotPasswordView(true);
                         setErrors({});
                       }}
-                      className="text-cyan-400 hover:underline font-medium text-[11px]"
+                      className="text-cyan-400 hover:underline font-medium text-xs"
                     >
                       Lupa Password?
                     </button>
@@ -470,13 +458,13 @@ export default function LoginPageClient() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-2.5 rounded-xl font-bold text-xs text-white transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] shadow-lg flex items-center justify-center gap-2 mt-1"
+                    className="w-full py-3 rounded-xl font-bold text-xs sm:text-sm text-white transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] shadow-lg flex items-center justify-center gap-2 mt-1"
                     style={{
                       background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
                       boxShadow: '0 0 16px rgba(6, 182, 212, 0.3)',
                     }}
                   >
-                    <LogIn size={14} />
+                    <LogIn size={15} />
                     <span>{loading ? 'Memproses...' : 'Masuk'}</span>
                   </button>
                 </form>
@@ -484,10 +472,10 @@ export default function LoginPageClient() {
 
               {/* ── TAB 2: REGISTER ── */}
               {tab === 'register' && (
-                <form onSubmit={handleRegisterSubmit} className="space-y-3">
+                <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
                   <div className="space-y-1">
                     <div className="relative">
-                      <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type="text"
                         value={regUsername}
@@ -496,7 +484,7 @@ export default function LoginPageClient() {
                           clearFieldError('regUsername');
                         }}
                         placeholder="Username"
-                        className={`w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                        className={`w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none transition-colors ${
                           errors.regUsername
                             ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
                             : 'border border-white/15 focus:border-cyan-400'
@@ -513,7 +501,7 @@ export default function LoginPageClient() {
 
                   <div className="space-y-1">
                     <div className="relative">
-                      <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type="email"
                         value={regEmail}
@@ -522,7 +510,7 @@ export default function LoginPageClient() {
                           clearFieldError('regEmail');
                         }}
                         placeholder="Email"
-                        className={`w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                        className={`w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none transition-colors ${
                           errors.regEmail
                             ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
                             : 'border border-white/15 focus:border-cyan-400'
@@ -539,7 +527,7 @@ export default function LoginPageClient() {
 
                   <div className="space-y-1">
                     <div className="relative">
-                      <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type={showPassword ? 'text' : 'password'}
                         value={regPassword}
@@ -548,7 +536,7 @@ export default function LoginPageClient() {
                           clearFieldError('regPassword');
                         }}
                         placeholder="Password"
-                        className={`w-full pl-9 pr-9 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                        className={`w-full pl-10 pr-10 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none transition-colors ${
                           errors.regPassword
                             ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
                             : 'border border-white/15 focus:border-cyan-400'
@@ -559,7 +547,7 @@ export default function LoginPageClient() {
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
                       >
-                        {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
                     {errors.regPassword && (
@@ -572,7 +560,7 @@ export default function LoginPageClient() {
 
                   <div className="space-y-1">
                     <div className="relative">
-                      <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type={showConfirmPassword ? 'text' : 'password'}
                         value={regConfirmPassword}
@@ -581,7 +569,7 @@ export default function LoginPageClient() {
                           clearFieldError('regConfirmPassword');
                         }}
                         placeholder="Konfirmasi Password"
-                        className={`w-full pl-9 pr-9 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                        className={`w-full pl-10 pr-10 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none transition-colors ${
                           errors.regConfirmPassword
                             ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
                             : 'border border-white/15 focus:border-cyan-400'
@@ -592,7 +580,7 @@ export default function LoginPageClient() {
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
                       >
-                        {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                        {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
                     {errors.regConfirmPassword && (
@@ -606,13 +594,13 @@ export default function LoginPageClient() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-2.5 rounded-xl font-bold text-xs text-white transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] shadow-lg flex items-center justify-center gap-2 mt-2"
+                    className="w-full py-3 rounded-xl font-bold text-xs sm:text-sm text-white transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] shadow-lg flex items-center justify-center gap-2 mt-1.5"
                     style={{
                       background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
                       boxShadow: '0 0 16px rgba(6, 182, 212, 0.3)',
                     }}
                   >
-                    <UserPlus size={14} />
+                    <UserPlus size={15} />
                     <span>{loading ? 'Mendaftarkan...' : 'Daftar Akun'}</span>
                   </button>
                 </form>
@@ -621,12 +609,12 @@ export default function LoginPageClient() {
           )}
 
           {/* Minimal Bottom Home Link */}
-          <div className="mt-4 pt-3 border-t border-white/[0.08] text-center">
+          <div className="mt-5 pt-3.5 border-t border-white/[0.08] text-center">
             <Link
               href="/"
-              className="text-[11px] text-slate-400 hover:text-cyan-400 transition-colors inline-flex items-center gap-1"
+              className="text-xs text-slate-400 hover:text-cyan-400 transition-colors inline-flex items-center gap-1.5"
             >
-              <Home size={12} />
+              <Home size={13} />
               <span>Kembali ke Beranda</span>
             </Link>
           </div>

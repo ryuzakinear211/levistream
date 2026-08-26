@@ -210,7 +210,7 @@ export async function getMoviesByGenre(
 }
 
 export async function getGenres(): Promise<Genre[]> {
-  const data = await fetchTMDB<GenreListResponse>('/genre/movie/list');
+  const data = await fetchTMDB<GenreListResponse>('/genre/movie/list', { language: 'en-US' });
   return data.genres;
 }
 
@@ -236,7 +236,7 @@ export async function getGenreById(genreId: number): Promise<Genre | null> {
 }
 
 export async function getTVGenres(): Promise<Genre[]> {
-  const data = await fetchTMDB<GenreListResponse>('/genre/tv/list');
+  const data = await fetchTMDB<GenreListResponse>('/genre/tv/list', { language: 'en-US' });
   return data.genres;
 }
 
