@@ -26,7 +26,7 @@ export async function generateMetadata({ searchParams }: MoviePageProps): Promis
   };
 }
 
-export const revalidate = 60;
+export const revalidate = 3600;
 
 export default async function MoviePage({ searchParams }: MoviePageProps) {
   const page = Number(searchParams.page) || 1;

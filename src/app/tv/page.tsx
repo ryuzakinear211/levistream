@@ -11,6 +11,7 @@ import {
   getTVGenres,
   getGenres,
 } from '@/lib/tmdb';
+import { getAllFeaturedCustomTV } from '@/lib/markdownTV';
 import siteConfig from '@/config';
 
 export const metadata: Metadata = {
@@ -18,23 +19,31 @@ export const metadata: Metadata = {
   description: `Discover trending and popular TV shows on ${siteConfig.name}.`,
 };
 
-export const revalidate = 60;
+export const revalidate = 3600;
 
 export default async function TVPage() {
-  const [trendingData, popularData, topRatedData, airingData, genresData] =
-    await Promise.allSettled([
-      getTrendingTV('week'),
-      getPopularTV(1),
-      getTopRatedTV(1),
-      getAiringTodayTV(1),
-      getTVGenres().catch(() => getGenres()),
-    ]);
+  const [
+    trendingData,
+    popularData,
+    topRatedData,
+    airingData,
+    genresData,
+    customFeaturedData,
+  ] = await Promise.allSettled([
+    getTrendingTV('week'),
+    getPopularTV(1),
+    getTopRatedTV(1),
+    getAiringTodayTV(1),
+    getTVGenres().catch(() => getGenres()),
+    getAllFeaturedCustomTV(),
+  ]);
 
   const trending = trendingData.status === 'fulfilled' ? trendingData.value.results : [];
   const popular = popularData.status === 'fulfilled' ? popularData.value.results : [];
   const topRated = topRatedData.status === 'fulfilled' ? topRatedData.value.results : [];
   const airingToday = airingData.status === 'fulfilled' ? airingData.value.results : [];
   const genreList = genresData.status === 'fulfilled' ? genresData.value : [];
+  const customFeaturedShows = customFeaturedData.status === 'fulfilled' ? customFeaturedData.value : [];
 
   const featuredShow = trending[0] || popular[0];
 
@@ -46,6 +55,7 @@ export default async function TVPage() {
           tvShow={featuredShow}
           tvShows={trending}
           genres={genreList}
+          customFeaturedItems={customFeaturedShows.length > 0 ? customFeaturedShows : undefined}
           type="tv"
           badgeText="Featured Series"
         />

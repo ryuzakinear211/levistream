@@ -13,7 +13,7 @@ import {
 import { getEnrichedFeaturedItems } from '@/lib/featured';
 import siteConfig from '@/config';
 
-export const revalidate = 60;
+export const revalidate = 3600;
 
 export default async function HomePage() {
   const [
