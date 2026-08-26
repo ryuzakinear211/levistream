@@ -20,8 +20,7 @@ export async function generateMetadata({ searchParams }: TVBrowsePageProps): Pro
   };
 }
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export const revalidate = 60;
 
 export default async function TVBrowsePage({ searchParams }: TVBrowsePageProps) {
   const page = Number(searchParams.page) || 1;

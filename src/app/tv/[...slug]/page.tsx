@@ -16,9 +16,7 @@ import TVDetailClient, { TVDetailHeaderActions } from '@/components/TVDetailClie
 import TVEpisodeList from '@/components/TVEpisodeList';
 import siteConfig from '@/config';
 
-export const dynamic = 'force-dynamic';
-export const dynamicParams = true;
-export const revalidate = 0;
+export const revalidate = 60;
 
 interface PageProps {
   params: {
