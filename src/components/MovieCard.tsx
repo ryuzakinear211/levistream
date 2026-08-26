@@ -78,7 +78,7 @@ export default function MovieCard({ item, type = 'movie' }: MovieCardProps) {
       <div className="pt-2 sm:pt-2.5 px-0.5 space-y-1">
         <h3
           title={title}
-          className="font-bold text-white text-xs sm:text-[13.5px] leading-snug line-clamp-2 transition-colors duration-200 group-hover:text-cyan-400"
+          className="font-bold text-white text-xs sm:text-[13.5px] leading-snug line-clamp-2"
         >
           {title}
         </h3>

@@ -11,13 +11,10 @@ import {
   User,
   Eye,
   EyeOff,
-  Sparkles,
   ArrowLeft,
   CheckCircle2,
-  Film,
-  ShieldCheck,
-  Tv,
-  Bookmark,
+  AlertCircle,
+  Home,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import siteConfig from '@/config';
@@ -43,24 +40,40 @@ export default function LoginPageClient() {
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
 
   const [forgotEmail, setForgotEmail] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+
+  // Field-specific validation errors for outline coloring
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const clearFieldError = (fieldName: string) => {
+    if (errors[fieldName]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[fieldName];
+        return next;
+      });
+    }
+  };
+
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
     setSuccessMsg('');
+    const newErrors: Record<string, string> = {};
 
     if (!loginIdentifier.trim()) {
-      setErrorMsg('Username atau Email wajib diisi');
-      return;
+      newErrors.loginIdentifier = 'Username atau Email wajib diisi';
     }
     if (!loginPassword) {
-      setErrorMsg('Password wajib diisi');
+      newErrors.loginPassword = 'Password wajib diisi';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
+    setErrors({});
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
@@ -80,32 +93,45 @@ export default function LoginPageClient() {
       setSuccessMsg(`Selamat datang kembali, ${username}!`);
       setTimeout(() => {
         router.push('/');
-      }, 700);
-    }, 500);
+      }, 600);
+    }, 400);
   };
 
   const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
     setSuccessMsg('');
+    const newErrors: Record<string, string> = {};
 
     if (!regUsername.trim()) {
-      setErrorMsg('Username wajib diisi');
-      return;
+      newErrors.regUsername = 'Username wajib diisi';
+    } else if (regUsername.trim().length < 3) {
+      newErrors.regUsername = 'Username minimal 3 karakter';
     }
-    if (!regEmail.trim() || !regEmail.includes('@')) {
-      setErrorMsg('Alamat Email yang valid wajib diisi');
-      return;
+
+    if (!regEmail.trim()) {
+      newErrors.regEmail = 'Email wajib diisi';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail.trim())) {
+      newErrors.regEmail = 'Format email tidak valid';
     }
-    if (!regPassword || regPassword.length < 6) {
-      setErrorMsg('Password minimal 6 karakter');
-      return;
+
+    if (!regPassword) {
+      newErrors.regPassword = 'Password wajib diisi';
+    } else if (regPassword.length < 6) {
+      newErrors.regPassword = 'Password minimal 6 karakter';
     }
-    if (regPassword !== regConfirmPassword) {
-      setErrorMsg('Konfirmasi password tidak cocok');
+
+    if (!regConfirmPassword) {
+      newErrors.regConfirmPassword = 'Ulangi password Anda';
+    } else if (regPassword && regPassword !== regConfirmPassword) {
+      newErrors.regConfirmPassword = 'Password tidak sama';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
+    setErrors({});
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
@@ -115,73 +141,75 @@ export default function LoginPageClient() {
         createdAt: new Date().toISOString(),
       });
 
-      setSuccessMsg(`Akun berhasil dibuat! Selamat datang, ${regUsername}!`);
+      setSuccessMsg(`Akun berhasil dibuat!`);
       setTimeout(() => {
         router.push('/');
-      }, 700);
-    }, 500);
+      }, 600);
+    }, 400);
   };
 
   const handleForgotSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
+    const newErrors: Record<string, string> = {};
 
-    if (!forgotEmail.trim() || !forgotEmail.includes('@')) {
-      setErrorMsg('Masukkan email terdaftar Anda');
+    if (!forgotEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotEmail.trim())) {
+      newErrors.forgotEmail = 'Masukkan format email yang valid';
+      setErrors(newErrors);
       return;
     }
 
+    setErrors({});
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
       setForgotSubmitted(true);
-    }, 500);
+    }, 400);
   };
 
-  // If user is already logged in, show profile card with option to logout
+  // If user is already logged in, show profile card with logout option
   if (user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6" style={{ background: '#050816' }}>
         <div
-          className="w-full max-w-md rounded-3xl p-6 sm:p-8 text-center"
+          className="w-full max-w-[380px] rounded-3xl p-6 sm:p-8 text-center"
           style={{
-            background: 'rgba(9, 14, 32, 0.85)',
+            background: 'rgba(9, 14, 32, 0.92)',
             backdropFilter: 'blur(24px)',
             border: '1px solid rgba(255, 255, 255, 0.1)',
             boxShadow: '0 25px 60px rgba(0,0,0,0.7), 0 0 30px rgba(6,182,212,0.15)',
           }}
         >
           <div
-            className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center text-xl font-black text-white"
+            className="w-14 h-14 rounded-full mx-auto mb-3 flex items-center justify-center text-lg font-black text-white"
             style={{
               background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
-              boxShadow: '0 0 20px rgba(6,182,212,0.4)',
+              boxShadow: '0 0 16px rgba(6,182,212,0.35)',
             }}
           >
             {user.username.charAt(0).toUpperCase()}
           </div>
 
-          <h2 className="text-xl sm:text-2xl font-black text-white mb-1">{user.username}</h2>
-          <p className="text-xs text-slate-400 mb-6">{user.email}</p>
+          <h2 className="text-lg font-bold text-white mb-0.5">{user.username}</h2>
+          <p className="text-xs text-slate-400 mb-5">{user.email}</p>
 
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2.5">
             <Link
               href="/"
-              className="w-full py-3 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded-xl font-bold text-xs text-white flex items-center justify-center gap-2"
               style={{
                 background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
-                boxShadow: '0 0 18px rgba(6,182,212,0.35)',
+                boxShadow: '0 0 16px rgba(6,182,212,0.3)',
               }}
             >
-              <Film size={16} />
-              <span>Mulai Menonton Film</span>
+              <Home size={14} />
+              <span>Kembali ke Beranda</span>
             </Link>
 
             <button
               onClick={logout}
-              className="w-full py-2.5 rounded-xl font-bold text-xs text-slate-400 hover:text-rose-400 bg-white/5 hover:bg-rose-500/10 border border-white/10 hover:border-rose-500/30 transition-colors"
+              className="w-full py-2.5 rounded-xl font-semibold text-xs text-slate-400 hover:text-rose-400 bg-white/5 hover:bg-rose-500/10 border border-white/10 hover:border-rose-500/30 transition-colors"
             >
-              Keluar dari Akun (Logout)
+              Keluar Akun
             </button>
           </div>
         </div>
@@ -190,121 +218,66 @@ export default function LoginPageClient() {
   }
 
   return (
-    <div className="min-h-screen relative flex flex-col justify-between p-4 sm:p-6 lg:p-8" style={{ background: '#050816' }}>
+    <div className="min-h-screen relative flex items-center justify-center p-4 sm:p-6" style={{ background: '#050816' }}>
       {/* ── Ambient Background Glows ── */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         <div
-          className="absolute -top-40 -left-40 w-96 h-96 rounded-full blur-[140px] opacity-25"
+          className="absolute top-1/4 -left-20 w-80 h-80 rounded-full blur-[120px] opacity-20"
           style={{ background: '#06b6d4' }}
         />
         <div
-          className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full blur-[140px] opacity-25"
+          className="absolute bottom-1/4 -right-20 w-80 h-80 rounded-full blur-[120px] opacity-20"
           style={{ background: '#7c3aed' }}
         />
       </div>
 
-      {/* ── Top Bar with Back Button ── */}
-      <div className="relative z-10 w-full max-w-5xl mx-auto flex items-center justify-between">
-        <Link
-          href="/"
-          className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold text-slate-300 hover:text-white bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 transition-all duration-200"
-        >
-          <ArrowLeft size={16} />
-          <span>Kembali ke Beranda</span>
-        </Link>
-
-        <Link href="/" className="flex items-center gap-2.5 group">
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
-              boxShadow: '0 0 14px rgba(6,182,212,0.35)',
-            }}
-          >
-            <Film size={18} className="text-white" />
-          </div>
-          <span
-            className="text-base sm:text-lg font-black uppercase tracking-wider hidden xs:inline"
-            style={{
-              background: 'linear-gradient(135deg, #06b6d4 0%, #a78bfa 50%, #ec4899 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-            }}
-          >
-            {siteConfig.name}
-          </span>
-        </Link>
-      </div>
-
-      {/* ── Main Form Container ── */}
-      <div className="relative z-10 w-full max-w-[460px] mx-auto my-8">
+      {/* ── Main Form Card ── */}
+      <div className="relative z-10 w-full max-w-[400px]">
         <div
-          className="rounded-3xl p-6 sm:p-8 transition-all duration-300"
+          className="rounded-3xl p-6 sm:p-7 transition-all duration-300"
           style={{
-            background: 'rgba(9, 14, 32, 0.88)',
+            background: 'rgba(9, 14, 32, 0.94)',
             backdropFilter: 'blur(30px) saturate(190%)',
             WebkitBackdropFilter: 'blur(30px) saturate(190%)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
             boxShadow:
-              '0 30px 80px rgba(0, 0, 0, 0.85), 0 0 40px rgba(6, 182, 212, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.15)',
+              '0 25px 70px rgba(0, 0, 0, 0.85), 0 0 35px rgba(6, 182, 212, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
           }}
         >
-          {/* Header Title */}
-          <div className="text-center mb-6">
-            <div
-              className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-3"
-              style={{
-                background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
-                boxShadow: '0 0 20px rgba(6, 182, 212, 0.4)',
-              }}
-            >
-              <Sparkles size={22} className="text-white" />
-            </div>
-
-            <h1 className="text-2xl font-black text-white tracking-tight">
-              {forgotPasswordView
-                ? 'Lupa Password'
-                : tab === 'login'
-                ? 'Masuk ke Akun Anda'
-                : 'Daftar Akun Baru'}
-            </h1>
-            <p className="text-xs text-slate-400 mt-1">
-              {forgotPasswordView
-                ? 'Pulihkan akses akun Anda dengan mudah'
-                : tab === 'login'
-                ? 'Lanjutkan menonton dan kelola watchlist favorit'
-                : 'Bergabung sekarang untuk pengalaman streaming lengkap'}
-            </p>
-          </div>
-
-          {/* Success Message */}
+          {/* Success Message Banner */}
           {successMsg && (
-            <div className="mb-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-2">
-              <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" />
+            <div className="mb-4 p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-2">
+              <CheckCircle2 size={15} className="text-emerald-400 flex-shrink-0" />
               <span>{successMsg}</span>
-            </div>
-          )}
-
-          {/* Error Message */}
-          {errorMsg && (
-            <div className="mb-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-medium">
-              {errorMsg}
             </div>
           )}
 
           {/* ── FORGOT PASSWORD VIEW ── */}
           {forgotPasswordView ? (
             <div>
+              <div className="flex items-center gap-2 mb-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForgotPasswordView(false);
+                    setForgotSubmitted(false);
+                    setErrors({});
+                  }}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <ArrowLeft size={16} />
+                </button>
+                <h3 className="text-sm font-bold text-white">Lupa Password</h3>
+              </div>
+
               {forgotSubmitted ? (
-                <div className="text-center py-4 space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto">
-                    <CheckCircle2 size={24} />
+                <div className="text-center py-3 space-y-2.5">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto">
+                    <CheckCircle2 size={20} />
                   </div>
-                  <h3 className="text-sm font-bold text-white">Email Terkirim!</h3>
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    Tautan instruksi untuk mereset password telah dikirim ke{' '}
-                    <span className="text-cyan-400 font-semibold">{forgotEmail}</span>.
+                  <h4 className="text-xs font-bold text-white">Email Terkirim</h4>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    Tautan reset password dikirim ke <span className="text-cyan-400 font-semibold">{forgotEmail}</span>.
                   </p>
                   <button
                     type="button"
@@ -313,53 +286,60 @@ export default function LoginPageClient() {
                       setForgotSubmitted(false);
                       setTab('login');
                     }}
-                    className="w-full mt-4 py-2.5 rounded-xl text-xs font-bold text-white bg-white/10 hover:bg-white/20 transition-colors"
+                    className="w-full mt-3 py-2.5 rounded-xl text-xs font-bold text-white bg-white/10 hover:bg-white/20 transition-colors"
                   >
-                    Kembali ke Halaman Masuk
+                    Kembali Masuk
                   </button>
                 </div>
               ) : (
-                <form onSubmit={handleForgotSubmit} className="space-y-4">
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    Masukkan alamat email yang terhubung dengan akun Anda. Kami akan mengirimkan tautan untuk membuat kata sandi baru.
-                  </p>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-300">Email</label>
+                <form onSubmit={handleForgotSubmit} className="space-y-3.5">
+                  <div className="space-y-1">
                     <div className="relative">
-                      <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type="email"
                         value={forgotEmail}
-                        onChange={(e) => setForgotEmail(e.target.value)}
-                        placeholder="nama@email.com"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.06] border border-white/15 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
-                        required
+                        onChange={(e) => {
+                          setForgotEmail(e.target.value);
+                          clearFieldError('forgotEmail');
+                        }}
+                        placeholder="Masukkan Email Anda"
+                        className={`w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                          errors.forgotEmail
+                            ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
+                            : 'border border-white/15 focus:border-cyan-400'
+                        }`}
                       />
                     </div>
+                    {errors.forgotEmail && (
+                      <p className="text-[11px] text-rose-400 font-medium pl-1 flex items-center gap-1">
+                        <AlertCircle size={11} />
+                        {errors.forgotEmail}
+                      </p>
+                    )}
                   </div>
 
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-3 rounded-xl font-bold text-sm text-white transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg flex items-center justify-center gap-2"
+                    className="w-full py-2.5 rounded-xl font-bold text-xs text-white transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] shadow-lg flex items-center justify-center gap-2"
                     style={{
                       background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
-                      boxShadow: '0 0 20px rgba(6, 182, 212, 0.35)',
+                      boxShadow: '0 0 16px rgba(6, 182, 212, 0.3)',
                     }}
                   >
-                    {loading ? 'Mengirim...' : 'Kirim Tautan Reset'}
+                    {loading ? 'Mengirim...' : 'Kirim Tautan'}
                   </button>
 
                   <button
                     type="button"
                     onClick={() => {
                       setForgotPasswordView(false);
-                      setErrorMsg('');
+                      setErrors({});
                     }}
-                    className="w-full text-center text-xs font-bold text-slate-400 hover:text-white pt-2"
+                    className="w-full text-center text-xs font-semibold text-slate-400 hover:text-white pt-1"
                   >
-                    Batal dan Kembali
+                    Batal
                   </button>
                 </form>
               )}
@@ -368,20 +348,20 @@ export default function LoginPageClient() {
             /* ── TABS: LOGIN & REGISTER ── */
             <>
               {/* Tab Selector */}
-              <div className="flex rounded-2xl p-1 bg-white/[0.05] border border-white/10 mb-6">
+              <div className="flex rounded-2xl p-1 bg-white/[0.05] border border-white/10 mb-5">
                 <button
                   type="button"
                   onClick={() => {
                     setTab('login');
-                    setErrorMsg('');
+                    setErrors({});
                   }}
-                  className={`flex-1 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all duration-200 ${
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all duration-200 ${
                     tab === 'login'
                       ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white shadow-md'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  <LogIn size={14} />
+                  <LogIn size={13} />
                   <span>Masuk</span>
                 </button>
 
@@ -389,65 +369,83 @@ export default function LoginPageClient() {
                   type="button"
                   onClick={() => {
                     setTab('register');
-                    setErrorMsg('');
+                    setErrors({});
                   }}
-                  className={`flex-1 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all duration-200 ${
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all duration-200 ${
                     tab === 'register'
                       ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white shadow-md'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  <UserPlus size={14} />
+                  <UserPlus size={13} />
                   <span>Daftar</span>
                 </button>
               </div>
 
               {/* ── TAB 1: LOGIN ── */}
               {tab === 'login' && (
-                <form onSubmit={handleLoginSubmit} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-300">
-                      Username atau Email
-                    </label>
+                <form onSubmit={handleLoginSubmit} className="space-y-3.5">
+                  <div className="space-y-1">
                     <div className="relative">
-                      <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type="text"
                         value={loginIdentifier}
-                        onChange={(e) => setLoginIdentifier(e.target.value)}
-                        placeholder="Username atau nama@email.com"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.06] border border-white/15 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
-                        required
+                        onChange={(e) => {
+                          setLoginIdentifier(e.target.value);
+                          clearFieldError('loginIdentifier');
+                        }}
+                        placeholder="Username/Email"
+                        className={`w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                          errors.loginIdentifier
+                            ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
+                            : 'border border-white/15 focus:border-cyan-400'
+                        }`}
                       />
                     </div>
+                    {errors.loginIdentifier && (
+                      <p className="text-[11px] text-rose-400 font-medium pl-1 flex items-center gap-1">
+                        <AlertCircle size={11} />
+                        {errors.loginIdentifier}
+                      </p>
+                    )}
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-300">
-                      Password
-                    </label>
+                  <div className="space-y-1">
                     <div className="relative">
-                      <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type={showPassword ? 'text' : 'password'}
                         value={loginPassword}
-                        onChange={(e) => setLoginPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-white/[0.06] border border-white/15 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
-                        required
+                        onChange={(e) => {
+                          setLoginPassword(e.target.value);
+                          clearFieldError('loginPassword');
+                        }}
+                        placeholder="Password"
+                        className={`w-full pl-9 pr-9 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                          errors.loginPassword
+                            ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
+                            : 'border border-white/15 focus:border-cyan-400'
+                        }`}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
                       >
-                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                       </button>
                     </div>
+                    {errors.loginPassword && (
+                      <p className="text-[11px] text-rose-400 font-medium pl-1 flex items-center gap-1">
+                        <AlertCircle size={11} />
+                        {errors.loginPassword}
+                      </p>
+                    )}
                   </div>
 
-                  <div className="flex items-center justify-between text-xs pt-1">
-                    <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                  <div className="flex items-center justify-between text-xs pt-0.5">
+                    <label className="flex items-center gap-2 cursor-pointer text-slate-300 text-[11px]">
                       <input
                         type="checkbox"
                         checked={rememberMe}
@@ -461,9 +459,9 @@ export default function LoginPageClient() {
                       type="button"
                       onClick={() => {
                         setForgotPasswordView(true);
-                        setErrorMsg('');
+                        setErrors({});
                       }}
-                      className="text-cyan-400 hover:underline font-medium"
+                      className="text-cyan-400 hover:underline font-medium text-[11px]"
                     >
                       Lupa Password?
                     </button>
@@ -472,117 +470,167 @@ export default function LoginPageClient() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-3 rounded-xl font-bold text-sm text-white transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg flex items-center justify-center gap-2 mt-2"
+                    className="w-full py-2.5 rounded-xl font-bold text-xs text-white transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] shadow-lg flex items-center justify-center gap-2 mt-1"
                     style={{
                       background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
-                      boxShadow: '0 0 20px rgba(6, 182, 212, 0.35)',
+                      boxShadow: '0 0 16px rgba(6, 182, 212, 0.3)',
                     }}
                   >
-                    <LogIn size={16} />
-                    <span>{loading ? 'Memproses...' : 'Masuk Sekarang'}</span>
+                    <LogIn size={14} />
+                    <span>{loading ? 'Memproses...' : 'Masuk'}</span>
                   </button>
                 </form>
               )}
 
               {/* ── TAB 2: REGISTER ── */}
               {tab === 'register' && (
-                <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
+                <form onSubmit={handleRegisterSubmit} className="space-y-3">
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-300">Username</label>
                     <div className="relative">
-                      <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type="text"
                         value={regUsername}
-                        onChange={(e) => setRegUsername(e.target.value)}
-                        placeholder="Pilih username unik"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.06] border border-white/15 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
-                        required
+                        onChange={(e) => {
+                          setRegUsername(e.target.value);
+                          clearFieldError('regUsername');
+                        }}
+                        placeholder="Username"
+                        className={`w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                          errors.regUsername
+                            ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
+                            : 'border border-white/15 focus:border-cyan-400'
+                        }`}
                       />
                     </div>
+                    {errors.regUsername && (
+                      <p className="text-[11px] text-rose-400 font-medium pl-1 flex items-center gap-1">
+                        <AlertCircle size={11} />
+                        {errors.regUsername}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-300">Email</label>
                     <div className="relative">
-                      <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type="email"
                         value={regEmail}
-                        onChange={(e) => setRegEmail(e.target.value)}
-                        placeholder="nama@email.com"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.06] border border-white/15 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
-                        required
+                        onChange={(e) => {
+                          setRegEmail(e.target.value);
+                          clearFieldError('regEmail');
+                        }}
+                        placeholder="Email"
+                        className={`w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                          errors.regEmail
+                            ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
+                            : 'border border-white/15 focus:border-cyan-400'
+                        }`}
                       />
                     </div>
+                    {errors.regEmail && (
+                      <p className="text-[11px] text-rose-400 font-medium pl-1 flex items-center gap-1">
+                        <AlertCircle size={11} />
+                        {errors.regEmail}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-300">Password</label>
                     <div className="relative">
-                      <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type={showPassword ? 'text' : 'password'}
                         value={regPassword}
-                        onChange={(e) => setRegPassword(e.target.value)}
-                        placeholder="Minimal 6 karakter"
-                        className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-white/[0.06] border border-white/15 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
-                        required
+                        onChange={(e) => {
+                          setRegPassword(e.target.value);
+                          clearFieldError('regPassword');
+                        }}
+                        placeholder="Password"
+                        className={`w-full pl-9 pr-9 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                          errors.regPassword
+                            ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
+                            : 'border border-white/15 focus:border-cyan-400'
+                        }`}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
                       >
-                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                       </button>
                     </div>
+                    {errors.regPassword && (
+                      <p className="text-[11px] text-rose-400 font-medium pl-1 flex items-center gap-1">
+                        <AlertCircle size={11} />
+                        {errors.regPassword}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-300">Konfirmasi Password</label>
                     <div className="relative">
-                      <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type={showConfirmPassword ? 'text' : 'password'}
                         value={regConfirmPassword}
-                        onChange={(e) => setRegConfirmPassword(e.target.value)}
-                        placeholder="Ulangi password"
-                        className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-white/[0.06] border border-white/15 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
-                        required
+                        onChange={(e) => {
+                          setRegConfirmPassword(e.target.value);
+                          clearFieldError('regConfirmPassword');
+                        }}
+                        placeholder="Konfirmasi Password"
+                        className={`w-full pl-9 pr-9 py-2.5 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                          errors.regConfirmPassword
+                            ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
+                            : 'border border-white/15 focus:border-cyan-400'
+                        }`}
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
                       >
-                        {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                       </button>
                     </div>
+                    {errors.regConfirmPassword && (
+                      <p className="text-[11px] text-rose-400 font-medium pl-1 flex items-center gap-1">
+                        <AlertCircle size={11} />
+                        {errors.regConfirmPassword}
+                      </p>
+                    )}
                   </div>
 
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-3 rounded-xl font-bold text-sm text-white transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg flex items-center justify-center gap-2 mt-3"
+                    className="w-full py-2.5 rounded-xl font-bold text-xs text-white transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] shadow-lg flex items-center justify-center gap-2 mt-2"
                     style={{
                       background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
-                      boxShadow: '0 0 20px rgba(6, 182, 212, 0.35)',
+                      boxShadow: '0 0 16px rgba(6, 182, 212, 0.3)',
                     }}
                   >
-                    <UserPlus size={16} />
-                    <span>{loading ? 'Mendaftarkan...' : 'Daftar Akun Baru'}</span>
+                    <UserPlus size={14} />
+                    <span>{loading ? 'Mendaftarkan...' : 'Daftar Akun'}</span>
                   </button>
                 </form>
               )}
             </>
           )}
-        </div>
-      </div>
 
-      {/* ── Footer ── */}
-      <div className="relative z-10 text-center py-2 text-xs text-slate-500">
-        &copy; {new Date().getFullYear()} {siteConfig.name}. Hak cipta dilindungi.
+          {/* Minimal Bottom Home Link */}
+          <div className="mt-4 pt-3 border-t border-white/[0.08] text-center">
+            <Link
+              href="/"
+              className="text-[11px] text-slate-400 hover:text-cyan-400 transition-colors inline-flex items-center gap-1"
+            >
+              <Home size={12} />
+              <span>Kembali ke Beranda</span>
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -10,13 +10,12 @@ import {
   User,
   Eye,
   EyeOff,
-  Sparkles,
   ArrowLeft,
   CheckCircle2,
+  AlertCircle,
   Bookmark,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import siteConfig from '@/config';
 
 export default function AuthModal() {
   const {
@@ -44,8 +43,20 @@ export default function AuthModal() {
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
 
   const [forgotEmail, setForgotEmail] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+
+  // Field errors for dynamic outline coloring
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+
+  const clearFieldError = (fieldName: string) => {
+    if (errors[fieldName]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[fieldName];
+        return next;
+      });
+    }
+  };
 
   // Sync tab with context when modal opens
   useEffect(() => {
@@ -53,8 +64,9 @@ export default function AuthModal() {
       setTab(authModalTab);
       setForgotPasswordView(false);
       setForgotSubmitted(false);
-      setErrorMsg('');
+      setErrors({});
       setShowPassword(false);
+      setShowConfirmPassword(false);
     }
   }, [isAuthModalOpen, authModalTab]);
 
@@ -73,17 +85,21 @@ export default function AuthModal() {
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
+    const newErrors: Record<string, string> = {};
 
     if (!loginIdentifier.trim()) {
-      setErrorMsg('Username atau Email wajib diisi');
-      return;
+      newErrors.loginIdentifier = 'Username atau Email wajib diisi';
     }
     if (!loginPassword) {
-      setErrorMsg('Password wajib diisi');
+      newErrors.loginPassword = 'Password wajib diisi';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
+    setErrors({});
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
@@ -101,25 +117,38 @@ export default function AuthModal() {
 
   const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
+    const newErrors: Record<string, string> = {};
 
     if (!regUsername.trim()) {
-      setErrorMsg('Username wajib diisi');
-      return;
+      newErrors.regUsername = 'Username wajib diisi';
+    } else if (regUsername.trim().length < 3) {
+      newErrors.regUsername = 'Username minimal 3 karakter';
     }
-    if (!regEmail.trim() || !regEmail.includes('@')) {
-      setErrorMsg('Alamat Email yang valid wajib diisi');
-      return;
+
+    if (!regEmail.trim()) {
+      newErrors.regEmail = 'Email wajib diisi';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail.trim())) {
+      newErrors.regEmail = 'Format email tidak valid';
     }
-    if (!regPassword || regPassword.length < 6) {
-      setErrorMsg('Password minimal 6 karakter');
-      return;
+
+    if (!regPassword) {
+      newErrors.regPassword = 'Password wajib diisi';
+    } else if (regPassword.length < 6) {
+      newErrors.regPassword = 'Password minimal 6 karakter';
     }
-    if (regPassword !== regConfirmPassword) {
-      setErrorMsg('Konfirmasi password tidak cocok');
+
+    if (!regConfirmPassword) {
+      newErrors.regConfirmPassword = 'Ulangi password Anda';
+    } else if (regPassword && regPassword !== regConfirmPassword) {
+      newErrors.regConfirmPassword = 'Password tidak sama';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
+    setErrors({});
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
@@ -133,18 +162,20 @@ export default function AuthModal() {
 
   const handleForgotSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
+    const newErrors: Record<string, string> = {};
 
-    if (!forgotEmail.trim() || !forgotEmail.includes('@')) {
-      setErrorMsg('Masukkan email terdaftar Anda');
+    if (!forgotEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotEmail.trim())) {
+      newErrors.forgotEmail = 'Masukkan email yang valid';
+      setErrors(newErrors);
       return;
     }
 
+    setErrors({});
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
       setForgotSubmitted(true);
-    }, 500);
+    }, 400);
   };
 
   return (
@@ -157,89 +188,59 @@ export default function AuthModal() {
 
       {/* ── Modal Card ── */}
       <div
-        className="relative w-full max-w-[440px] rounded-3xl p-6 sm:p-8 z-10 transition-all duration-300 animate-in fade-in zoom-in-95"
+        className="relative w-full max-w-[390px] rounded-3xl p-5 sm:p-6 z-10 transition-all duration-300 animate-in fade-in zoom-in-95"
         style={{
-          background: 'rgba(9, 14, 32, 0.95)',
+          background: 'rgba(9, 14, 32, 0.96)',
           backdropFilter: 'blur(30px) saturate(190%)',
           WebkitBackdropFilter: 'blur(30px) saturate(190%)',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
           boxShadow:
-            '0 25px 70px rgba(0, 0, 0, 0.85), 0 0 40px rgba(6, 182, 212, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.15)',
+            '0 25px 70px rgba(0, 0, 0, 0.85), 0 0 35px rgba(6, 182, 212, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
         }}
       >
         {/* Close Button */}
         <button
           onClick={closeAuthModal}
-          className="absolute top-5 right-5 w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all duration-150"
+          className="absolute top-4 right-4 w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all duration-150"
           aria-label="Tutup"
         >
-          <X size={18} />
+          <X size={16} />
         </button>
 
-        {/* ── Top Header / Brand ── */}
-        <div className="text-center mb-6">
-          <div
-            className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-3"
-            style={{
-              background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
-              boxShadow: '0 0 20px rgba(6, 182, 212, 0.4)',
-            }}
-          >
-            <Sparkles size={22} className="text-white" />
+        {/* ── Watchlist / Login Alert Notice (Only when needed) ── */}
+        <div className="mb-4 pr-8">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-cyan-500/10 border border-cyan-500/25 text-cyan-300 text-xs font-semibold">
+            <Bookmark size={14} className="text-cyan-400 flex-shrink-0" />
+            <span>{authModalMessage || 'Silakan login untuk menyimpan ke Watchlist'}</span>
           </div>
-
-          <h2
-            className="text-xl sm:text-2xl font-black uppercase tracking-wider"
-            style={{
-              background: 'linear-gradient(135deg, #06b6d4 0%, #a78bfa 50%, #ec4899 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-            }}
-          >
-            {siteConfig.name}
-          </h2>
-
-          {/* Contextual Message (e.g. Watchlist requirement notice) */}
-          {authModalMessage ? (
-            <div className="mt-3 flex items-center justify-center gap-2 p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-semibold">
-              <Bookmark size={14} className="flex-shrink-0 text-cyan-400" />
-              <span>{authModalMessage}</span>
-            </div>
-          ) : (
-            <p className="text-xs text-slate-400 mt-1">
-              Streaming film & serial favorit tanpa batas
-            </p>
-          )}
         </div>
 
         {/* ── FORGOT PASSWORD VIEW ── */}
         {forgotPasswordView ? (
           <div>
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2 mb-3.5">
               <button
                 type="button"
                 onClick={() => {
                   setForgotPasswordView(false);
                   setForgotSubmitted(false);
-                  setErrorMsg('');
+                  setErrors({});
                 }}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
               >
-                <ArrowLeft size={16} />
+                <ArrowLeft size={15} />
               </button>
-              <h3 className="text-base font-bold text-white">Reset Password</h3>
+              <h3 className="text-xs font-bold text-white">Reset Password</h3>
             </div>
 
             {forgotSubmitted ? (
-              <div className="text-center py-4 space-y-3">
-                <div className="w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto">
-                  <CheckCircle2 size={24} />
+              <div className="text-center py-3 space-y-2.5">
+                <div className="w-9 h-9 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto">
+                  <CheckCircle2 size={18} />
                 </div>
-                <h4 className="text-sm font-bold text-white">Email Terkirim!</h4>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Tautan instruksi untuk mereset password telah dikirim ke{' '}
-                  <span className="text-cyan-400 font-semibold">{forgotEmail}</span>.
+                <h4 className="text-xs font-bold text-white">Email Terkirim</h4>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Tautan reset password telah dikirim ke <span className="text-cyan-400 font-semibold">{forgotEmail}</span>.
                 </p>
                 <button
                   type="button"
@@ -248,70 +249,82 @@ export default function AuthModal() {
                     setForgotSubmitted(false);
                     setTab('login');
                   }}
-                  className="w-full mt-4 py-2.5 rounded-xl text-xs font-bold text-white bg-white/10 hover:bg-white/20 transition-colors"
+                  className="w-full mt-2 py-2 rounded-xl text-xs font-bold text-white bg-white/10 hover:bg-white/20 transition-colors"
                 >
-                  Kembali ke Halaman Masuk
+                  Kembali Masuk
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleForgotSubmit} className="space-y-4">
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Masukkan alamat email akun Anda. Kami akan mengirimkan tautan untuk membuat password baru.
-                </p>
-
-                {errorMsg && (
-                  <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-medium">
-                    {errorMsg}
-                  </div>
-                )}
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300">Email</label>
+              <form onSubmit={handleForgotSubmit} className="space-y-3">
+                <div className="space-y-1">
                   <div className="relative">
-                    <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="email"
                       value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
-                      placeholder="nama@email.com"
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.06] border border-white/15 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
-                      required
+                      onChange={(e) => {
+                        setForgotEmail(e.target.value);
+                        clearFieldError('forgotEmail');
+                      }}
+                      placeholder="Masukkan Email Anda"
+                      className={`w-full pl-8 pr-3 py-2 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                        errors.forgotEmail
+                          ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
+                          : 'border border-white/15 focus:border-cyan-400'
+                      }`}
                     />
                   </div>
+                  {errors.forgotEmail && (
+                    <p className="text-[11px] text-rose-400 font-medium pl-1 flex items-center gap-1">
+                      <AlertCircle size={10} />
+                      {errors.forgotEmail}
+                    </p>
+                  )}
                 </div>
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3 rounded-xl font-bold text-sm text-white transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg flex items-center justify-center gap-2"
+                  className="w-full py-2.5 rounded-xl font-bold text-xs text-white transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] shadow-lg flex items-center justify-center gap-2"
                   style={{
                     background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
-                    boxShadow: '0 0 20px rgba(6, 182, 212, 0.35)',
+                    boxShadow: '0 0 16px rgba(6, 182, 212, 0.3)',
                   }}
                 >
-                  {loading ? 'Mengirim...' : 'Kirim Tautan Reset'}
+                  {loading ? 'Mengirim...' : 'Kirim Tautan'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForgotPasswordView(false);
+                    setErrors({});
+                  }}
+                  className="w-full text-center text-xs font-semibold text-slate-400 hover:text-white pt-0.5"
+                >
+                  Batal
                 </button>
               </form>
             )}
           </div>
         ) : (
-          /* ── LOGIN / REGISTER TABS VIEW ── */
+          /* ── TABS: LOGIN & REGISTER ── */
           <>
-            {/* Tab Buttons */}
-            <div className="flex rounded-2xl p-1 bg-white/[0.05] border border-white/10 mb-5">
+            {/* Tab Selector */}
+            <div className="flex rounded-2xl p-1 bg-white/[0.05] border border-white/10 mb-4">
               <button
                 type="button"
                 onClick={() => {
                   setTab('login');
-                  setErrorMsg('');
+                  setErrors({});
                 }}
-                className={`flex-1 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all duration-200 ${
+                className={`flex-1 py-1.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all duration-200 ${
                   tab === 'login'
                     ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white shadow-md'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <LogIn size={14} />
+                <LogIn size={13} />
                 <span>Masuk</span>
               </button>
 
@@ -319,72 +332,83 @@ export default function AuthModal() {
                 type="button"
                 onClick={() => {
                   setTab('register');
-                  setErrorMsg('');
+                  setErrors({});
                 }}
-                className={`flex-1 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all duration-200 ${
+                className={`flex-1 py-1.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all duration-200 ${
                   tab === 'register'
                     ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white shadow-md'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <UserPlus size={14} />
+                <UserPlus size={13} />
                 <span>Daftar</span>
               </button>
             </div>
 
-            {/* Error Notification */}
-            {errorMsg && (
-              <div className="mb-4 p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-medium">
-                {errorMsg}
-              </div>
-            )}
-
-            {/* ── TAB 1: LOGIN FORM ── */}
+            {/* ── TAB 1: LOGIN ── */}
             {tab === 'login' && (
-              <form onSubmit={handleLoginSubmit} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300">
-                    Username atau Email
-                  </label>
+              <form onSubmit={handleLoginSubmit} className="space-y-3">
+                <div className="space-y-1">
                   <div className="relative">
-                    <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="text"
                       value={loginIdentifier}
-                      onChange={(e) => setLoginIdentifier(e.target.value)}
-                      placeholder="Username atau nama@email.com"
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.06] border border-white/15 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
-                      required
+                      onChange={(e) => {
+                        setLoginIdentifier(e.target.value);
+                        clearFieldError('loginIdentifier');
+                      }}
+                      placeholder="Username/Email"
+                      className={`w-full pl-8 pr-3 py-2 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                        errors.loginIdentifier
+                          ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
+                          : 'border border-white/15 focus:border-cyan-400'
+                      }`}
                     />
                   </div>
+                  {errors.loginIdentifier && (
+                    <p className="text-[11px] text-rose-400 font-medium pl-1 flex items-center gap-1">
+                      <AlertCircle size={10} />
+                      {errors.loginIdentifier}
+                    </p>
+                  )}
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300">
-                    Password
-                  </label>
+                <div className="space-y-1">
                   <div className="relative">
-                    <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-white/[0.06] border border-white/15 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
-                      required
+                      onChange={(e) => {
+                        setLoginPassword(e.target.value);
+                        clearFieldError('loginPassword');
+                      }}
+                      placeholder="Password"
+                      className={`w-full pl-8 pr-8 py-2 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                        errors.loginPassword
+                          ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
+                          : 'border border-white/15 focus:border-cyan-400'
+                      }`}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
                     >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                   </div>
+                  {errors.loginPassword && (
+                    <p className="text-[11px] text-rose-400 font-medium pl-1 flex items-center gap-1">
+                      <AlertCircle size={10} />
+                      {errors.loginPassword}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between text-xs pt-0.5">
-                  <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                  <label className="flex items-center gap-1.5 cursor-pointer text-slate-300 text-[11px]">
                     <input
                       type="checkbox"
                       checked={rememberMe}
@@ -398,9 +422,9 @@ export default function AuthModal() {
                     type="button"
                     onClick={() => {
                       setForgotPasswordView(true);
-                      setErrorMsg('');
+                      setErrors({});
                     }}
-                    className="text-cyan-400 hover:underline font-medium"
+                    className="text-cyan-400 hover:underline font-medium text-[11px]"
                   >
                     Lupa Password?
                   </button>
@@ -409,106 +433,150 @@ export default function AuthModal() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3 rounded-xl font-bold text-sm text-white transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg flex items-center justify-center gap-2 mt-2"
+                  className="w-full py-2.5 rounded-xl font-bold text-xs text-white transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] shadow-lg flex items-center justify-center gap-2 mt-1"
                   style={{
                     background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
-                    boxShadow: '0 0 20px rgba(6, 182, 212, 0.35)',
+                    boxShadow: '0 0 16px rgba(6, 182, 212, 0.3)',
                   }}
                 >
-                  <LogIn size={16} />
-                  <span>{loading ? 'Memproses...' : 'Masuk Sekarang'}</span>
+                  <LogIn size={13} />
+                  <span>{loading ? 'Memproses...' : 'Masuk'}</span>
                 </button>
               </form>
             )}
 
-            {/* ── TAB 2: REGISTER FORM ── */}
+            {/* ── TAB 2: REGISTER ── */}
             {tab === 'register' && (
-              <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-300">Username</label>
+              <form onSubmit={handleRegisterSubmit} className="space-y-2.5">
+                <div className="space-y-0.5">
                   <div className="relative">
-                    <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="text"
                       value={regUsername}
-                      onChange={(e) => setRegUsername(e.target.value)}
-                      placeholder="Username unik"
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.06] border border-white/15 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
-                      required
+                      onChange={(e) => {
+                        setRegUsername(e.target.value);
+                        clearFieldError('regUsername');
+                      }}
+                      placeholder="Username"
+                      className={`w-full pl-8 pr-3 py-2 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                        errors.regUsername
+                          ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
+                          : 'border border-white/15 focus:border-cyan-400'
+                      }`}
                     />
                   </div>
+                  {errors.regUsername && (
+                    <p className="text-[11px] text-rose-400 font-medium pl-1 flex items-center gap-1">
+                      <AlertCircle size={10} />
+                      {errors.regUsername}
+                    </p>
+                  )}
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-300">Email</label>
+                <div className="space-y-0.5">
                   <div className="relative">
-                    <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="email"
                       value={regEmail}
-                      onChange={(e) => setRegEmail(e.target.value)}
-                      placeholder="nama@email.com"
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.06] border border-white/15 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
-                      required
+                      onChange={(e) => {
+                        setRegEmail(e.target.value);
+                        clearFieldError('regEmail');
+                      }}
+                      placeholder="Email"
+                      className={`w-full pl-8 pr-3 py-2 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                        errors.regEmail
+                          ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
+                          : 'border border-white/15 focus:border-cyan-400'
+                      }`}
                     />
                   </div>
+                  {errors.regEmail && (
+                    <p className="text-[11px] text-rose-400 font-medium pl-1 flex items-center gap-1">
+                      <AlertCircle size={10} />
+                      {errors.regEmail}
+                    </p>
+                  )}
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-300">Password</label>
+                <div className="space-y-0.5">
                   <div className="relative">
-                    <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={regPassword}
-                      onChange={(e) => setRegPassword(e.target.value)}
-                      placeholder="Minimal 6 karakter"
-                      className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-white/[0.06] border border-white/15 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
-                      required
+                      onChange={(e) => {
+                        setRegPassword(e.target.value);
+                        clearFieldError('regPassword');
+                      }}
+                      placeholder="Password"
+                      className={`w-full pl-8 pr-8 py-2 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                        errors.regPassword
+                          ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
+                          : 'border border-white/15 focus:border-cyan-400'
+                      }`}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
                     >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                   </div>
+                  {errors.regPassword && (
+                    <p className="text-[11px] text-rose-400 font-medium pl-1 flex items-center gap-1">
+                      <AlertCircle size={10} />
+                      {errors.regPassword}
+                    </p>
+                  )}
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-300">Konfirmasi Password</label>
+                <div className="space-y-0.5">
                   <div className="relative">
-                    <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type={showConfirmPassword ? 'text' : 'password'}
                       value={regConfirmPassword}
-                      onChange={(e) => setRegConfirmPassword(e.target.value)}
-                      placeholder="Ulangi password"
-                      className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-white/[0.06] border border-white/15 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
-                      required
+                      onChange={(e) => {
+                        setRegConfirmPassword(e.target.value);
+                        clearFieldError('regConfirmPassword');
+                      }}
+                      placeholder="Konfirmasi Password"
+                      className={`w-full pl-8 pr-8 py-2 rounded-xl bg-white/[0.06] text-white text-xs placeholder-slate-500 focus:outline-none transition-colors ${
+                        errors.regConfirmPassword
+                          ? 'border border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5'
+                          : 'border border-white/15 focus:border-cyan-400'
+                      }`}
                     />
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
                     >
-                      {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      {showConfirmPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                   </div>
+                  {errors.regConfirmPassword && (
+                    <p className="text-[11px] text-rose-400 font-medium pl-1 flex items-center gap-1">
+                      <AlertCircle size={10} />
+                      {errors.regConfirmPassword}
+                    </p>
+                  )}
                 </div>
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3 rounded-xl font-bold text-sm text-white transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg flex items-center justify-center gap-2 mt-3"
+                  className="w-full py-2.5 rounded-xl font-bold text-xs text-white transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] shadow-lg flex items-center justify-center gap-2 mt-1.5"
                   style={{
                     background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
-                    boxShadow: '0 0 20px rgba(6, 182, 212, 0.35)',
+                    boxShadow: '0 0 16px rgba(6, 182, 212, 0.3)',
                   }}
                 >
-                  <UserPlus size={16} />
-                  <span>{loading ? 'Mendaftarkan...' : 'Daftar Akun Baru'}</span>
+                  <UserPlus size={13} />
+                  <span>{loading ? 'Mendaftarkan...' : 'Daftar Akun'}</span>
                 </button>
               </form>
             )}
