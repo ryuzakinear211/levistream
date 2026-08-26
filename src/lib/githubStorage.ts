@@ -179,27 +179,32 @@ export async function getGitHubRawFile(filePath: string, options: GitHubOptions 
   const branch = options.branch || DEFAULT_BRANCH;
   const token = getEffectiveToken(options.token);
 
-  // If token is available, use GitHub API with Accept: application/vnd.github.v3.raw for instant live data
-  if (token) {
-    try {
-      const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${cleanPath}?ref=${branch}&_t=${Date.now()}`;
-      const res = await fetch(apiUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/vnd.github.v3.raw',
-          'User-Agent': 'LeviStream-CMS',
-        },
-        cache: 'no-store',
-      });
-      if (res.ok) {
-        return await res.text();
-      }
-    } catch {}
-  }
-
-  // Fallback to public GitHub raw URL with timestamp cache buster
+  // 1. Primary: Use GitHub REST API with Accept: application/vnd.github.v3.raw (Bypasses Fastly CDN cache completely)
   try {
-    const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${cleanPath}?_t=${Date.now()}`;
+    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${cleanPath}?ref=${branch}`;
+    const headers: Record<string, string> = {
+      Accept: 'application/vnd.github.v3.raw',
+      'User-Agent': 'LeviStream-CMS',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(apiUrl, {
+      headers,
+      cache: 'no-store',
+    });
+    if (res.ok) {
+      const text = await res.text();
+      if (text && text.includes('---')) {
+        return text;
+      }
+    }
+  } catch {}
+
+  // 2. Secondary Fallback: public GitHub raw URL with timestamp cache buster
+  try {
+    const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${cleanPath}`;
     const res = await fetch(rawUrl, {
       cache: 'no-store',
     });

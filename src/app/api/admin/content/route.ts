@@ -642,37 +642,41 @@ export async function POST(request: NextRequest) {
 
       fileContent = matter.stringify(content || '', frontmatterData);
 
-      // Save _index.md
-      let wroteIndexLocal = false;
-      try {
-        const fullPath = path.join(process.cwd(), relativePath);
-        const dir = path.dirname(fullPath);
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(fullPath, fileContent, 'utf8');
-        wroteIndexLocal = true;
-      } catch (fsErr: any) {
-        if (fsErr.code !== 'EROFS' && !fsErr.message?.includes('read-only')) {
-          throw fsErr;
-        }
-      }
+      // Save TV Show _index.md
+      const isProductionOrCloud = Boolean(process.env.VERCEL || process.env.NODE_ENV === 'production');
 
-      if (!wroteIndexLocal) {
+      if (isProductionOrCloud) {
         if (!token) {
           return NextResponse.json(
             {
               error:
-                'Sistem hosting Vercel bersifat Read-Only. Masukkan GitHub Personal Access Token di Pengaturan Admin (tombol ⚙️) untuk menyimpan langsung ke repositori.',
+                'Token GitHub diperlukan untuk menyimpan ke repositori di cloud hosting (Vercel). Buka Pengaturan Admin (ikon ⚙️) dan masukkan Personal Access Token GitHub Anda.',
               requiresToken: true,
             },
             { status: 400 }
           );
         }
+
         await saveGitHubFile(relativePath, fileContent, `cms: save ${relativePath}`, ghConfig);
-      } else if (token) {
+
         try {
-          await saveGitHubFile(relativePath, fileContent, `cms: save ${relativePath}`, ghConfig);
-        } catch (ghErr: any) {
-          console.warn('Local index save succeeded; GitHub sync notice:', ghErr?.message);
+          const fullPath = path.join(process.cwd(), relativePath);
+          const dir = path.dirname(fullPath);
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+          fs.writeFileSync(fullPath, fileContent, 'utf8');
+        } catch {}
+      } else {
+        const fullPath = path.join(process.cwd(), relativePath);
+        const dir = path.dirname(fullPath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(fullPath, fileContent, 'utf8');
+
+        if (token) {
+          try {
+            await saveGitHubFile(relativePath, fileContent, `cms: save ${relativePath}`, ghConfig);
+          } catch (ghErr: any) {
+            console.warn('Local index save succeeded; GitHub sync notice:', ghErr?.message);
+          }
         }
       }
 
@@ -681,7 +685,9 @@ export async function POST(request: NextRequest) {
       if (Array.isArray(seasons) && seasons.length > 0) {
         for (const s of seasons) {
           const rawSeason = String(s.season || s.name || 's1').trim();
-          const cleanSeason = rawSeason.toLowerCase().startsWith('s') ? rawSeason.toLowerCase() : `s${rawSeason.replace(/\D/g, '') || '1'}`;
+          const cleanSeason = rawSeason.toLowerCase().startsWith('s')
+            ? rawSeason.toLowerCase()
+            : `s${rawSeason.replace(/\D/g, '') || '1'}`;
           const episodesList = Array.isArray(s.episodes) ? s.episodes : [];
 
           for (const ep of episodesList) {
@@ -698,44 +704,34 @@ export async function POST(request: NextRequest) {
               if (ep.title && ep.title.trim()) epFrontmatter.title = ep.title.trim();
               if (ep.desc && ep.desc.trim()) epFrontmatter.deskripsi = ep.desc.trim();
               if (ep.poster || ep.image_url) epFrontmatter.image_url = (ep.poster || ep.image_url).trim();
-              if (ep.rating !== undefined && ep.rating !== null && ep.rating !== '') epFrontmatter.rating = Number(ep.rating);
+              if (ep.rating !== undefined && ep.rating !== null && ep.rating !== '')
+                epFrontmatter.rating = Number(ep.rating);
               if (ep.duration && ep.duration.trim()) epFrontmatter.duration = ep.duration.trim();
               if (ep.subtitles && ep.subtitles.trim()) epFrontmatter.subtitles = ep.subtitles.trim();
 
               const epContentStr = matter.stringify(ep.content || '', epFrontmatter);
 
-              let wroteEpLocal = false;
-              try {
+              if (isProductionOrCloud) {
+                await saveGitHubFile(epRelPath, epContentStr, `cms: save ${epRelPath}`, ghConfig);
+                try {
+                  const fullEpPath = path.join(process.cwd(), epRelPath);
+                  const epDir = path.dirname(fullEpPath);
+                  if (!fs.existsSync(epDir)) fs.mkdirSync(epDir, { recursive: true });
+                  fs.writeFileSync(fullEpPath, epContentStr, 'utf8');
+                } catch {}
+              } else {
                 const fullEpPath = path.join(process.cwd(), epRelPath);
                 const epDir = path.dirname(fullEpPath);
                 if (!fs.existsSync(epDir)) fs.mkdirSync(epDir, { recursive: true });
                 fs.writeFileSync(fullEpPath, epContentStr, 'utf8');
-                wroteEpLocal = true;
-              } catch (fsErr: any) {
-                if (fsErr.code !== 'EROFS' && !fsErr.message?.includes('read-only')) {
-                  throw fsErr;
+
+                if (token) {
+                  try {
+                    await saveGitHubFile(epRelPath, epContentStr, `cms: save ${epRelPath}`, ghConfig);
+                  } catch {}
                 }
               }
 
-              if (!wroteEpLocal) {
-                if (!token) {
-                  return NextResponse.json(
-                    {
-                      error:
-                        'Sistem hosting Vercel bersifat Read-Only. Masukkan GitHub Personal Access Token di Pengaturan Admin (tombol ⚙️) untuk menyimpan langsung ke repositori.',
-                      requiresToken: true,
-                    },
-                    { status: 400 }
-                  );
-                }
-                await saveGitHubFile(epRelPath, epContentStr, `cms: save ${epRelPath}`, ghConfig);
-              } else if (token) {
-                try {
-                  await saveGitHubFile(epRelPath, epContentStr, `cms: save ${epRelPath}`, ghConfig);
-                } catch (ghErr: any) {
-                  console.warn('Local ep save succeeded; GitHub sync notice:', ghErr?.message);
-                }
-              }
               savedEpisodesCount++;
             }
           }
@@ -752,7 +748,19 @@ export async function POST(request: NextRequest) {
         savedEpisodesCount,
       });
     } else if (contentType === 'tv_episode') {
-      const { showSlug, season = 's1', episode = 'e1', videourl, title, desc, poster, rating, subtitles, duration, content = '' } = body;
+      const {
+        showSlug,
+        season = 's1',
+        episode = 'e1',
+        videourl,
+        title,
+        desc,
+        poster,
+        rating,
+        subtitles,
+        duration,
+        content = '',
+      } = body;
 
       if (!showSlug) {
         return NextResponse.json({ error: 'showSlug is required for TV episode' }, { status: 400 });
@@ -764,7 +772,11 @@ export async function POST(request: NextRequest) {
 
       const cleanShowSlug = slugify(showSlug);
       const cleanSeason = season ? slugify(season) : null;
-      const cleanEp = episode ? (episode.startsWith('e') || episode.startsWith('ep') ? episode : `e${episode}`) : 'e1';
+      const cleanEp = episode
+        ? episode.startsWith('e') || episode.startsWith('ep')
+          ? episode
+          : `e${episode}`
+        : 'e1';
       const filename = `${slugify(cleanEp)}.md`;
 
       relativePath = cleanSeason
@@ -812,7 +824,8 @@ export async function POST(request: NextRequest) {
         if (frontmatterData.duration !== existingFrontmatter.duration) changedFields.push('Durasi');
         if (frontmatterData.subtitles !== existingFrontmatter.subtitles) changedFields.push('Subtitles');
         if (frontmatterData.title && frontmatterData.title !== existingFrontmatter.title) changedFields.push('Judul');
-        if (frontmatterData.deskripsi && frontmatterData.deskripsi !== existingFrontmatter.deskripsi) changedFields.push('Deskripsi');
+        if (frontmatterData.deskripsi && frontmatterData.deskripsi !== existingFrontmatter.deskripsi)
+          changedFields.push('Deskripsi');
         hasChanges = changedFields.length > 0;
       }
 
@@ -821,26 +834,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid contentType' }, { status: 400 });
     }
 
-    // Save: try Local Filesystem, fallback to GitHub API on EROFS
-    let wroteLocal = false;
-    try {
-      const fullPath = path.join(process.cwd(), relativePath);
-      const dir = path.dirname(fullPath);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(fullPath, fileContent, 'utf8');
-      wroteLocal = true;
-    } catch (fsErr: any) {
-      if (fsErr.code !== 'EROFS' && !fsErr.message?.includes('read-only')) {
-        throw fsErr;
-      }
-    }
+    // Save: strictly to GitHub in cloud/production, local in dev
+    const isProductionOrCloud = Boolean(process.env.VERCEL || process.env.NODE_ENV === 'production');
 
-    if (!wroteLocal) {
+    if (isProductionOrCloud) {
       if (!token) {
         return NextResponse.json(
           {
             error:
-              'Sistem hosting Vercel bersifat Read-Only. Masukkan GitHub Personal Access Token di Pengaturan Admin (tombol ⚙️) untuk menyimpan langsung ke repositori secara live.',
+              'Token GitHub diperlukan untuk menyimpan konten baru ke repositori di hosting cloud (Vercel). Buka Pengaturan Admin (ikon ⚙️) dan masukkan Personal Access Token GitHub Anda.',
             requiresToken: true,
           },
           { status: 400 }
@@ -848,11 +850,25 @@ export async function POST(request: NextRequest) {
       }
 
       await saveGitHubFile(relativePath, fileContent, `cms: ${isUpdate ? 'update' : 'create'} ${relativePath}`, ghConfig);
-    } else if (token) {
+
       try {
-        await saveGitHubFile(relativePath, fileContent, `cms: ${isUpdate ? 'update' : 'create'} ${relativePath}`, ghConfig);
-      } catch (ghErr: any) {
-        console.warn('Local save succeeded; GitHub sync notice:', ghErr?.message);
+        const fullPath = path.join(process.cwd(), relativePath);
+        const dir = path.dirname(fullPath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(fullPath, fileContent, 'utf8');
+      } catch {}
+    } else {
+      const fullPath = path.join(process.cwd(), relativePath);
+      const dir = path.dirname(fullPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(fullPath, fileContent, 'utf8');
+
+      if (token) {
+        try {
+          await saveGitHubFile(relativePath, fileContent, `cms: ${isUpdate ? 'update' : 'create'} ${relativePath}`, ghConfig);
+        } catch (ghErr: any) {
+          console.warn('Local save succeeded; GitHub sync notice:', ghErr?.message);
+        }
       }
     }
 
@@ -915,26 +931,15 @@ export async function PUT(request: NextRequest) {
 
     const fileContent = matter.stringify(content || '', cleanFrontmatter);
 
-    // Save: try Local Filesystem, fallback to GitHub API on EROFS
-    let wroteLocal = false;
-    try {
-      const fullPath = path.join(process.cwd(), relativePath);
-      const dir = path.dirname(fullPath);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(fullPath, fileContent, 'utf8');
-      wroteLocal = true;
-    } catch (fsErr: any) {
-      if (fsErr.code !== 'EROFS' && !fsErr.message?.includes('read-only')) {
-        throw fsErr;
-      }
-    }
+    // Save: strictly to GitHub in cloud/production, local in dev
+    const isProductionOrCloud = Boolean(process.env.VERCEL || process.env.NODE_ENV === 'production');
 
-    if (!wroteLocal) {
+    if (isProductionOrCloud) {
       if (!token) {
         return NextResponse.json(
           {
             error:
-              'Sistem hosting Vercel bersifat Read-Only. Masukkan GitHub Personal Access Token di Pengaturan Admin (tombol ⚙️) untuk menyimpan langsung ke repositori secara live.',
+              'Token GitHub diperlukan untuk menyimpan perubahan ke repositori di hosting cloud (Vercel). Buka Pengaturan Admin (ikon ⚙️) dan masukkan Personal Access Token GitHub Anda.',
             requiresToken: true,
           },
           { status: 400 }
@@ -942,11 +947,25 @@ export async function PUT(request: NextRequest) {
       }
 
       await saveGitHubFile(relativePath, fileContent, `cms: update ${relativePath}`, ghConfig);
-    } else if (token) {
+
       try {
-        await saveGitHubFile(relativePath, fileContent, `cms: update ${relativePath}`, ghConfig);
-      } catch (ghErr: any) {
-        console.warn('Local update succeeded; GitHub sync notice:', ghErr?.message);
+        const fullPath = path.join(process.cwd(), relativePath);
+        const dir = path.dirname(fullPath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(fullPath, fileContent, 'utf8');
+      } catch {}
+    } else {
+      const fullPath = path.join(process.cwd(), relativePath);
+      const dir = path.dirname(fullPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(fullPath, fileContent, 'utf8');
+
+      if (token) {
+        try {
+          await saveGitHubFile(relativePath, fileContent, `cms: update ${relativePath}`, ghConfig);
+        } catch (ghErr: any) {
+          console.warn('Local update succeeded; GitHub sync notice:', ghErr?.message);
+        }
       }
     }
 
@@ -987,6 +1006,8 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Path parameter or paths array is required' }, { status: 400 });
     }
 
+    const isProductionOrCloud = Boolean(process.env.VERCEL || process.env.NODE_ENV === 'production');
+
     for (const relativePath of pathsToDelete) {
       const isMovie = relativePath.startsWith('video/');
       const isTV = relativePath.startsWith('tv/');
@@ -995,8 +1016,32 @@ export async function DELETE(request: NextRequest) {
         continue;
       }
 
-      let deletedLocal = false;
-      try {
+      if (isProductionOrCloud) {
+        if (!token) {
+          return NextResponse.json(
+            {
+              error:
+                'Token GitHub diperlukan untuk menghapus konten dari repositori di hosting cloud (Vercel). Buka Pengaturan Admin (ikon ⚙️) dan masukkan Personal Access Token GitHub Anda.',
+              requiresToken: true,
+            },
+            { status: 400 }
+          );
+        }
+
+        await deleteGitHubFile(relativePath, `cms: delete ${relativePath}`, ghConfig);
+
+        try {
+          const fullPath = path.join(process.cwd(), relativePath);
+          if (fs.existsSync(fullPath)) {
+            const stat = fs.statSync(fullPath);
+            if (stat.isDirectory()) {
+              fs.rmSync(fullPath, { recursive: true, force: true });
+            } else {
+              fs.unlinkSync(fullPath);
+            }
+          }
+        } catch {}
+      } else {
         const fullPath = path.join(process.cwd(), relativePath);
         if (fs.existsSync(fullPath)) {
           const stat = fs.statSync(fullPath);
@@ -1005,32 +1050,14 @@ export async function DELETE(request: NextRequest) {
           } else {
             fs.unlinkSync(fullPath);
           }
-          deletedLocal = true;
-        }
-      } catch (fsErr: any) {
-        if (fsErr.code !== 'EROFS' && !fsErr.message?.includes('read-only')) {
-          throw fsErr;
-        }
-      }
-
-      if (!deletedLocal) {
-        if (!token) {
-          return NextResponse.json(
-            {
-              error:
-                'Sistem hosting Vercel bersifat Read-Only. Masukkan GitHub Personal Access Token di Pengaturan Admin (tombol ⚙️) untuk menghapus langsung di repositori secara live.',
-              requiresToken: true,
-            },
-            { status: 400 }
-          );
         }
 
-        await deleteGitHubFile(relativePath, `cms: delete ${relativePath}`, ghConfig);
-      } else if (token) {
-        try {
-          await deleteGitHubFile(relativePath, `cms: delete ${relativePath}`, ghConfig);
-        } catch (ghErr: any) {
-          console.warn('Local delete succeeded; GitHub sync notice:', ghErr?.message);
+        if (token) {
+          try {
+            await deleteGitHubFile(relativePath, `cms: delete ${relativePath}`, ghConfig);
+          } catch (ghErr: any) {
+            console.warn('Local delete succeeded; GitHub sync notice:', ghErr?.message);
+          }
         }
       }
     }

@@ -7,7 +7,7 @@ deskripsi: >-
   When Bonnie receives a Lilypad tablet as a gift and becomes obsessed, Buzz,
   Woody, Jessie and the rest of the gang's jobs become exponentially harder when
   they have to go head to head with the all-new threat to playtime.
-image_url: 'https://image.tmdb.org/t/p/w1280/aojc60D9HzRuUZEdpgkiuX0jA39.jpg'
+image_url: 'https://image.tmdb.org/t/p/w1280/qjTqY5coNiz6sVtPng40IzltsoN.jpg'
 rating: 8.2
 featured: false
 ---

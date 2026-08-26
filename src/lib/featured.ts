@@ -316,7 +316,7 @@ export async function getEnrichedFeaturedItems(options: GetFeaturedOptions = {})
 
   return featuredList.slice(0, maxItems);
     },
-    60_000, // 60s hard TTL
-    30_000  // 30s SWR
+    15_000, // 15s hard TTL
+    5_000   // 5s SWR
   );
 }

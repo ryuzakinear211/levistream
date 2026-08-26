@@ -349,7 +349,10 @@ export default function AdminPage() {
   const [githubOwner, setGithubOwner] = useState<string>('');
   const [githubRepo, setGithubRepo] = useState<string>('');
   const [githubBranch, setGithubBranch] = useState<string>('');
-  const [isLocalMode, setIsLocalMode] = useState<boolean>(true);
+  const isClientLocal = typeof window !== 'undefined'
+    ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    : process.env.NODE_ENV !== 'production';
+  const [isLocalMode, setIsLocalMode] = useState<boolean>(isClientLocal);
   const [tokenChecked, setTokenChecked] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -553,21 +556,27 @@ export default function AdminPage() {
 
   const requireToken = (actionName: string): boolean => {
     // In local development server / writable mode, token is NEVER required
-    if (isLocalMode) return true;
-    if (!githubToken) {
+    const isLocal = typeof window !== 'undefined'
+      ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      : isLocalMode;
+    if (isLocal) return true;
+    if (!githubToken || !githubToken.trim()) {
       setIsSettingsOpen(true);
-      showToast(`Token GitHub diperlukan untuk ${actionName} pada hosting cloud. Masukkan token di bawah ini.`, 'warning');
+      showToast(`Token GitHub diperlukan untuk ${actionName} pada hosting cloud (Vercel). Masukkan token Anda di Pengaturan.`, 'warning');
       return false;
     }
     return true;
   };
 
-  // Fetch content list from API
-  const fetchContent = useCallback(async () => {
+  // Fetch content list from API (supports silent background reload without UI flicker)
+  const fetchContent = useCallback(async (options: { silent?: boolean } = {}) => {
     try {
-      setLoading(true);
+      if (!options?.silent) {
+        setLoading(true);
+      }
       const res = await fetch('/api/admin/content', {
         headers: getHeaders(),
+        cache: 'no-store',
       });
       const data = await res.json();
       if (typeof data.isLocal === 'boolean') {
@@ -597,7 +606,9 @@ export default function AdminPage() {
     } catch (e) {
       showToast('Gagal memuat konten dari server', 'error');
     } finally {
-      setLoading(false);
+      if (!options?.silent) {
+        setLoading(false);
+      }
     }
   }, [getHeaders, githubOwner, tempOwner, githubRepo, tempRepo, githubBranch, tempBranch]);
 
@@ -1202,13 +1213,13 @@ export default function AdminPage() {
           );
         }
         setTmdbPreview(null);
-        fetchContent();
+        fetchContent({ silent: true });
       } else {
         if (result.requiresToken) {
           setIsSettingsOpen(true);
         }
         showToast(result.error || 'Gagal membuat konten', 'error');
-        fetchContent();
+        fetchContent({ silent: true });
       }
     } catch (e: any) {
       showToast('Terjadi kesalahan jaringan', 'error');
@@ -1272,9 +1283,13 @@ export default function AdminPage() {
           posterUrl: formattedPoster || existing?.posterUrl,
           rating: editingItem.frontmatter.rating ? Number(editingItem.frontmatter.rating) : existing?.rating,
           year: existing?.year,
-          updatedAt: Date.now(),
+          updatedAt: existing?.updatedAt || Date.now(),
         };
-        return [updatedMovie, ...prev.filter((m) => m.relativePath !== editingItem.relativePath)];
+        const exists = prev.some((m) => m.relativePath === editingItem.relativePath);
+        if (exists) {
+          return prev.map((m) => (m.relativePath === editingItem.relativePath ? updatedMovie : m));
+        }
+        return [updatedMovie, ...prev];
       });
     } else if (editingItem.type === 'tv_show') {
       setTvShows((prev) => {
@@ -1293,10 +1308,14 @@ export default function AdminPage() {
           posterUrl: formattedPoster || existing?.posterUrl,
           rating: editingItem.frontmatter.rating ? Number(editingItem.frontmatter.rating) : existing?.rating,
           year: existing?.year,
-          updatedAt: Date.now(),
+          updatedAt: existing?.updatedAt || Date.now(),
           episodes: existing ? existing.episodes : [],
         };
-        return [updatedShow, ...prev.filter((s) => s.showSlug !== updatedShow.showSlug)];
+        const exists = prev.some((s) => s.showSlug === updatedShow.showSlug);
+        if (exists) {
+          return prev.map((s) => (s.showSlug === updatedShow.showSlug ? updatedShow : s));
+        }
+        return [updatedShow, ...prev];
       });
     } else if (editingItem.type === 'tv_episode') {
       setTvShows((prev) => {
@@ -1319,7 +1338,7 @@ export default function AdminPage() {
           episodes: updatedEpisodes,
           updatedAt: Date.now(),
         };
-        return [updatedShow, ...prev.filter((s) => s.showSlug !== targetShow.showSlug)];
+        return prev.map((s) => (s.showSlug === targetShow.showSlug ? updatedShow : s));
       });
     }
 
@@ -1345,13 +1364,13 @@ export default function AdminPage() {
         setEditingItem(null);
         setEditErrors({});
         setEditTmdbPreview(null);
-        fetchContent();
+        fetchContent({ silent: true });
       } else {
         if (result.requiresToken) {
           setIsSettingsOpen(true);
         }
         showToast(result.error || 'Gagal menyimpan perubahan', 'error');
-        fetchContent();
+        fetchContent({ silent: true });
       }
     } catch (e) {
       showToast('Gagal menyimpan perubahan', 'error');
@@ -1382,11 +1401,11 @@ export default function AdminPage() {
       const data = await res.json();
       if (res.ok) {
         showToast(`Berhasil menghapus: ${label}`);
-        fetchContent();
+        fetchContent({ silent: true });
       } else {
         if (data.requiresToken) setIsSettingsOpen(true);
         showToast(data.error || 'Gagal menghapus konten', 'error');
-        fetchContent();
+        fetchContent({ silent: true });
       }
     } catch (e) {
       showToast('Gagal menghapus konten', 'error');
@@ -1443,10 +1462,10 @@ export default function AdminPage() {
       const data = await res.json();
       if (res.ok) {
         showToast(`Berhasil menghapus ${pathsToDelete.length} episode!`);
-        fetchContent();
+        fetchContent({ silent: true });
       } else {
         showToast(data.error || 'Gagal menghapus episode terpilih', 'error');
-        fetchContent();
+        fetchContent({ silent: true });
       }
     } catch {
       showToast('Gagal menghapus episode terpilih', 'error');
@@ -1485,10 +1504,10 @@ export default function AdminPage() {
       const data = await res.json();
       if (res.ok) {
         showToast(`Semua episode di ${formatSeasonLabel(seasonSlug)} berhasil dihapus!`);
-        fetchContent();
+        fetchContent({ silent: true });
       } else {
         showToast(data.error || 'Gagal menghapus semua episode', 'error');
-        fetchContent();
+        fetchContent({ silent: true });
       }
     } catch {
       showToast('Gagal menghapus episode', 'error');
@@ -1793,7 +1812,7 @@ export default function AdminPage() {
           </div>
 
           <button
-            onClick={fetchContent}
+            onClick={() => fetchContent()}
             className="p-1.5 rounded-md bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 flex items-center gap-1 text-xs font-semibold transition-all"
             title="Refresh Data"
           >
