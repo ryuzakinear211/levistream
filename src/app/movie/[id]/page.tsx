@@ -26,15 +26,7 @@ interface PageProps {
   };
 }
 
-/**
- * Pre-generates static params for all custom markdown movies in video/
- */
-export async function generateStaticParams() {
-  const customMovieSlugs = await getAllCustomMovieSlugs();
-  return customMovieSlugs.map((slug) => ({
-    id: slug,
-  }));
-}
+
 
 /**
  * Dynamic metadata generation for SEO & OpenGraph

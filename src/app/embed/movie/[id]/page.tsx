@@ -19,12 +19,7 @@ interface PageProps {
   };
 }
 
-export async function generateStaticParams() {
-  const customMovieSlugs = await getAllCustomMovieSlugs();
-  return customMovieSlugs.map((slug) => ({
-    id: slug,
-  }));
-}
+
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const movie = await getMovieDetailsWithCustomOverride(params.id).catch(() => null);

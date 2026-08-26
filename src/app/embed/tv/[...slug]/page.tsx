@@ -19,10 +19,7 @@ interface PageProps {
   };
 }
 
-export async function generateStaticParams() {
-  const customPaths = await getAllCustomTVSlugPaths();
-  return customPaths;
-}
+
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const data = await getTVShowDetailsWithCustomOverride(params.slug).catch(() => null);

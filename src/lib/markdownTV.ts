@@ -6,7 +6,7 @@ import { TVShowDetail } from '@/types/tmdb';
 import { getTVShowDetails, getImageUrl, searchTVShows } from '@/lib/tmdb';
 import { FeaturedItem } from '@/config';
 import { cleanVideoUrl, getTVUrl } from '@/lib/urls';
-import { getGitHubRawFile } from '@/lib/githubStorage';
+import { getGitHubRawFile, listGitHubDir } from '@/lib/githubStorage';
 
 export interface CustomTVFrontmatter {
   title?: string;
@@ -27,12 +27,12 @@ export interface CustomEpisodeFrontmatter {
   image_url?: string;
   deskripsi?: string;
   description?: string;
-  rating?: number | string;
-  duration?: string;
   episode_number?: number | string;
   season_number?: number | string;
-  subtitle?: string;
+  rating?: number | string;
+  duration?: string;
   subtitles?: any;
+  subtitle?: string;
   subtitle_url?: string;
   sub_url?: string;
   caption_url?: string;
@@ -40,11 +40,11 @@ export interface CustomEpisodeFrontmatter {
 }
 
 export interface CustomEpisode {
-  slug: string; // e.g. "s1/e1" or "e1"
-  filename: string;
-  seasonNumber: number | null; // null if flat without season folders
-  seasonFolder: string | null; // e.g. "s1"
-  episodeNumber: number; // e.g. 1
+  slug: string; // e.g. "e1" or "s1/e1"
+  filename: string; // e.g. "e1.md"
+  seasonNumber: number | null;
+  seasonFolder: string | null; // e.g. "s1" or null
+  episodeNumber: number;
   episodeLabel: string; // e.g. "S1:E1" or "EP 01"
   title: string;
   videoUrl: string | null;
@@ -120,7 +120,7 @@ function parseSeasonNumber(folderName: string): number | null {
 }
 
 /**
- * Gets all TV show directory names in `tv/`.
+ * Gets all TV show directory names in `tv/` on local disk.
  */
 export function getAllCustomTVShowDirs(): string[] {
   ensureTVDirExists();
@@ -131,6 +131,22 @@ export function getAllCustomTVShowDirs(): string[] {
     console.error('Error reading tv directories:', error);
     return [];
   }
+}
+
+/**
+ * Gets all TV show directory names asynchronously, discovering live directories from GitHub API in production/Vercel.
+ */
+export async function getAllCustomTVShowDirsAsync(): Promise<string[]> {
+  const localDirs = getAllCustomTVShowDirs();
+  if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+    try {
+      const ghDirs = await listGitHubDir('tv');
+      if (ghDirs.length > 0) {
+        return Array.from(new Set([...ghDirs, ...localDirs]));
+      }
+    } catch {}
+  }
+  return localDirs;
 }
 
 /**
@@ -219,7 +235,7 @@ export async function getAllCustomTVSlugPaths(): Promise<{ slug: string[] }[]> {
 export async function getCustomTVShowBySlug(showSlugOrTmdbId: string | number): Promise<CustomTVShowData | null> {
   ensureTVDirExists();
   const searchKey = String(showSlugOrTmdbId).trim().toLowerCase();
-  const showDirs = getAllCustomTVShowDirs();
+  const showDirs = await getAllCustomTVShowDirsAsync();
 
   // Extract trailing ID (e.g. "lanterns-95350" -> "95350") or strip year/ID
   const idMatch = searchKey.match(/-(\d+)$/);
@@ -700,7 +716,7 @@ export function getCustomTVTmdbMapping(): Record<string, string> {
  * Returns all custom markdown TV shows that have `featured: true` in their _index.md.
  */
 export async function getAllFeaturedCustomTV(): Promise<FeaturedItem[]> {
-  const showSlugs = getAllCustomTVShowDirs();
+  const showSlugs = await getAllCustomTVShowDirsAsync();
   const featuredShows: FeaturedItem[] = [];
 
   for (const slug of showSlugs) {

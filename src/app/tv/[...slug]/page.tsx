@@ -26,13 +26,7 @@ interface PageProps {
   };
 }
 
-/**
- * Pre-generates static params for all custom TV shows, seasons, and episodes in tv/
- */
-export async function generateStaticParams() {
-  const customPaths = await getAllCustomTVSlugPaths();
-  return customPaths;
-}
+
 
 /**
  * Dynamic metadata generation for SEO & OpenGraph

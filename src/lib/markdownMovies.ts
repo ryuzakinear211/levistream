@@ -6,7 +6,7 @@ import { MovieDetail } from '@/types/tmdb';
 import { getMovieDetails, getImageUrl, searchMovies } from '@/lib/tmdb';
 import siteConfig, { FeaturedItem } from '@/config';
 import { cleanVideoUrl, getMovieUrl } from '@/lib/urls';
-import { getGitHubRawFile } from '@/lib/githubStorage';
+import { getGitHubRawFile, listGitHubDir } from '@/lib/githubStorage';
 
 export interface CustomMovieFrontmatter {
   title?: string;
@@ -32,7 +32,7 @@ export interface CustomMovieData {
   filename: string;
   frontmatter: CustomMovieFrontmatter;
   contentHtml: string;
-  rawContent: string;
+  rawContent?: string;
 }
 
 export interface MergedMovieDetail extends MovieDetail {
@@ -56,7 +56,7 @@ function ensureContentDirExists(): void {
 }
 
 /**
- * Gets all markdown files from the `video/` directory.
+ * Gets all markdown files from the `video/` directory on local disk.
  */
 export function getAllCustomMovieFiles(): string[] {
   ensureContentDirExists();
@@ -67,6 +67,23 @@ export function getAllCustomMovieFiles(): string[] {
     console.error('Error reading custom movie files:', error);
     return [];
   }
+}
+
+/**
+ * Gets all markdown files asynchronously, discovering live files from GitHub API in production/Vercel.
+ */
+export async function getAllCustomMovieFilesAsync(): Promise<string[]> {
+  const localFiles = getAllCustomMovieFiles();
+  if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+    try {
+      const ghFiles = await listGitHubDir('video');
+      const mdFiles = ghFiles.filter((file) => file.endsWith('.md') || file.endsWith('.markdown'));
+      if (mdFiles.length > 0) {
+        return Array.from(new Set([...mdFiles, ...localFiles]));
+      }
+    } catch {}
+  }
+  return localFiles;
 }
 
 /**
@@ -184,7 +201,7 @@ export async function getCustomMovieBySlug(slugOrId: string | number): Promise<C
   const trailingId = idMatch ? idMatch[1] : null;
   const cleanWithoutSuffix = cleanKey.replace(/-(19\d{2}|20\d{2}|\d{4,})$/, '');
 
-  const files = getAllCustomMovieFiles();
+  const files = await getAllCustomMovieFilesAsync();
   let matchedFile: string | null = null;
   let fileContent = '';
 
@@ -198,23 +215,54 @@ export async function getCustomMovieBySlug(slugOrId: string | number): Promise<C
         continue;
       }
       matchedFile = file;
-      try {
-        const filePath = path.join(CONTENT_DIR, file);
-        fileContent = fs.readFileSync(filePath, 'utf8');
-      } catch (err) {
-        console.error(`Error reading ${file}:`, err);
-      }
       break;
     }
   }
 
-  // 2. Match by frontmatter tmdb_id, exact title slug, or title-year slug
+  // 2. Fetch live file content for matched file
+  if (matchedFile) {
+    if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+      try {
+        const liveText = await getGitHubRawFile(`video/${matchedFile}`);
+        if (liveText && liveText.includes('---')) {
+          fileContent = liveText;
+        }
+      } catch {}
+    }
+    if (!fileContent) {
+      try {
+        const filePath = path.join(CONTENT_DIR, matchedFile);
+        if (fs.existsSync(filePath)) {
+          fileContent = fs.readFileSync(filePath, 'utf8');
+        }
+      } catch (err) {
+        console.error(`Error reading ${matchedFile}:`, err);
+      }
+    }
+  }
+
+  // 3. Match by frontmatter tmdb_id, exact title slug, or title-year slug across files
   if (!matchedFile || !fileContent) {
     for (const file of files) {
       try {
-        const filePath = path.join(CONTENT_DIR, file);
-        const content = fs.readFileSync(filePath, 'utf8');
-        const parsed = matter(content);
+        let rawContent = '';
+        if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+          try {
+            const liveText = await getGitHubRawFile(`video/${file}`);
+            if (liveText && liveText.includes('---')) {
+              rawContent = liveText;
+            }
+          } catch {}
+        }
+        if (!rawContent) {
+          const filePath = path.join(CONTENT_DIR, file);
+          if (fs.existsSync(filePath)) {
+            rawContent = fs.readFileSync(filePath, 'utf8');
+          }
+        }
+        if (!rawContent) continue;
+
+        const parsed = matter(rawContent);
         const data = parsed.data as CustomMovieFrontmatter;
 
         if (data) {
@@ -225,7 +273,7 @@ export async function getCustomMovieBySlug(slugOrId: string | number): Promise<C
           if (isNumeric) {
             if (tmdbIdStr === cleanKey) {
               matchedFile = file;
-              fileContent = content;
+              fileContent = rawContent;
               break;
             }
             continue;
@@ -234,7 +282,7 @@ export async function getCustomMovieBySlug(slugOrId: string | number): Promise<C
           // Direct TMDB ID match or trailing ID match (e.g. "mutiny-1288445" -> tmdb_id 1288445)
           if (tmdbIdStr && (tmdbIdStr === cleanKey || (trailingId && tmdbIdStr === trailingId))) {
             matchedFile = file;
-            fileContent = content;
+            fileContent = rawContent;
             break;
           }
 
@@ -248,7 +296,7 @@ export async function getCustomMovieBySlug(slugOrId: string | number): Promise<C
               (tmdbIdStr && cleanKey === `${titleSlug}-${tmdbIdStr}`)
             ) {
               matchedFile = file;
-              fileContent = content;
+              fileContent = rawContent;
               break;
             }
           }
@@ -482,7 +530,7 @@ export async function getMovieDetailsWithCustomOverride(
  * Returns all custom markdown movies that have `featured: true` in their frontmatter.
  */
 export async function getAllFeaturedCustomMovies(): Promise<FeaturedItem[]> {
-  const files = getAllCustomMovieFiles();
+  const files = await getAllCustomMovieFilesAsync();
   const featuredMovies: FeaturedItem[] = [];
 
   for (const file of files) {
