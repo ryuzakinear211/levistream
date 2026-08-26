@@ -9,6 +9,6 @@ deskripsi: >-
   they have to go head to head with the all-new threat to playtime.
 image_url: 'https://image.tmdb.org/t/p/w1280/aojc60D9HzRuUZEdpgkiuX0jA39.jpg'
 rating: 8.2
-featured: true
+featured: false
 ---
 
