@@ -16,15 +16,13 @@ import TVDetailClient, { TVDetailHeaderActions } from '@/components/TVDetailClie
 import TVEpisodeList from '@/components/TVEpisodeList';
 import siteConfig from '@/config';
 
-export const revalidate = 60;
+export const revalidate = 3600;
 
 interface PageProps {
   params: {
     slug: string[];
   };
 }
-
-
 
 /**
  * Dynamic metadata generation for SEO & OpenGraph

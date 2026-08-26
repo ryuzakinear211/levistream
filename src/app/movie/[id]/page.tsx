@@ -16,15 +16,13 @@ import MovieDetailClient from '@/components/MovieDetailClient';
 import VideoPlayer from '@/components/VideoPlayer';
 import siteConfig from '@/config';
 
-export const revalidate = 60;
+export const revalidate = 3600;
 
 interface PageProps {
   params: {
     id: string;
   };
 }
-
-
 
 /**
  * Dynamic metadata generation for SEO & OpenGraph

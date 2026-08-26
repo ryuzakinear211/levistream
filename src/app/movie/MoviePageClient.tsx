@@ -4,19 +4,21 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { SlidersHorizontal, ChevronLeft, ChevronRight, Film } from 'lucide-react';
 import { Movie, Genre } from '@/types/tmdb';
-import { discoverMovies } from '@/lib/tmdb';
+import { discoverMovies, getGenres } from '@/lib/tmdb';
 import MovieCard, { MovieCardSkeleton } from '@/components/MovieCard';
 import GenreFilter from '@/components/GenreFilter';
 
 interface MoviePageClientProps {
-  initialMovies: Movie[];
-  totalPages: number;
-  totalResults: number;
-  initialPage: number;
-  initialSort: string;
+  initialMovies?: Movie[];
+  totalPages?: number;
+  totalResults?: number;
+  initialPage?: number;
+  initialSort?: string;
   initialGenreId?: number;
-  allGenres: Genre[];
+  allGenres?: Genre[];
 }
+
+const movieClientCache = new Map<string, any>();
 
 const SORT_OPTIONS = [
   { value: 'popularity.desc', label: 'Most Popular' },
@@ -27,27 +29,37 @@ const SORT_OPTIONS = [
 ];
 
 export default function MoviePageClient({
-  initialMovies,
-  totalPages: initialTotalPages,
-  totalResults: initialTotalResults,
-  initialPage,
-  initialSort,
+  initialMovies = [],
+  totalPages: initialTotalPages = 1,
+  totalResults: initialTotalResults = 0,
+  initialPage = 1,
+  initialSort = 'popularity.desc',
   initialGenreId,
-  allGenres,
+  allGenres: propGenres = [],
 }: MoviePageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const [genres, setGenres] = useState<Genre[]>(propGenres);
   const [movies, setMovies] = useState<Movie[]>(initialMovies);
   const [page, setPage] = useState(initialPage);
   const [sort, setSort] = useState(initialSort);
   const [genreId, setGenreId] = useState<number | undefined>(initialGenreId);
   const [totalPages, setTotalPages] = useState(initialTotalPages);
   const [totalResults, setTotalResults] = useState(initialTotalResults);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(initialMovies.length === 0);
   const [sortOpen, setSortOpen] = useState(false);
 
   const sortRef = useRef<HTMLDivElement>(null);
+
+  // Fetch genres if not provided
+  useEffect(() => {
+    if (genres.length === 0) {
+      getGenres()
+        .then((g) => setGenres(g))
+        .catch(() => {});
+    }
+  }, [genres.length]);
 
   // Close sort dropdown when clicking outside
   useEffect(() => {
@@ -73,19 +85,27 @@ export default function MoviePageClient({
 
   // Fetch movies when filter/sort/page change
   useEffect(() => {
-    if (page === initialPage && sort === initialSort && genreId === initialGenreId) return;
+    const cacheKey = `${page}_${sort}_${genreId || 'all'}`;
+    if (movieClientCache.has(cacheKey)) {
+      const cached = movieClientCache.get(cacheKey);
+      setMovies(cached.results);
+      setTotalPages(Math.min(cached.total_pages, 20));
+      setTotalResults(cached.total_results);
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     discoverMovies(page, sort, genreId)
       .then((data) => {
+        movieClientCache.set(cacheKey, data);
         setMovies(data.results);
         setTotalPages(Math.min(data.total_pages, 20));
         setTotalResults(data.total_results);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
       })
       .catch(() => setMovies([]))
       .finally(() => setLoading(false));
-  }, [page, sort, genreId, initialPage, initialSort, initialGenreId]);
+  }, [page, sort, genreId]);
 
   const updateUrl = (newPage: number, newSort: string, newGenreId?: number) => {
     const params = new URLSearchParams();
@@ -185,10 +205,10 @@ export default function MoviePageClient({
         </div>
 
         {/* ── Browse by Genre Filter ── */}
-        {allGenres.length > 0 && (
+        {genres.length > 0 && (
           <div className="mb-8">
             <GenreFilter
-              genres={allGenres}
+              genres={genres}
               activeGenreId={genreId}
               type="movie"
               allHref="/movie"

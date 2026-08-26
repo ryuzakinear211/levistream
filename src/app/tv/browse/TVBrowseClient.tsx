@@ -4,19 +4,21 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { SlidersHorizontal, ChevronLeft, ChevronRight, Tv } from 'lucide-react';
 import { TVShow, Genre } from '@/types/tmdb';
-import { discoverTVShows } from '@/lib/tmdb';
+import { discoverTVShows, getTVGenres, getGenres } from '@/lib/tmdb';
 import MovieCard, { MovieCardSkeleton } from '@/components/MovieCard';
 import GenreFilter from '@/components/GenreFilter';
 
 interface TVBrowseClientProps {
-  initialShows: TVShow[];
-  totalPages: number;
-  totalResults: number;
-  initialPage: number;
-  initialSort: string;
+  initialShows?: TVShow[];
+  totalPages?: number;
+  totalResults?: number;
+  initialPage?: number;
+  initialSort?: string;
   initialGenreId?: number;
-  allGenres: Genre[];
+  allGenres?: Genre[];
 }
+
+const tvClientCache = new Map<string, any>();
 
 const SORT_OPTIONS = [
   { value: 'popularity.desc', label: 'Most Popular' },
@@ -26,27 +28,38 @@ const SORT_OPTIONS = [
 ];
 
 export default function TVBrowseClient({
-  initialShows,
-  totalPages: initialTotalPages,
-  totalResults: initialTotalResults,
-  initialPage,
-  initialSort,
+  initialShows = [],
+  totalPages: initialTotalPages = 1,
+  totalResults: initialTotalResults = 0,
+  initialPage = 1,
+  initialSort = 'popularity.desc',
   initialGenreId,
-  allGenres,
+  allGenres: propGenres = [],
 }: TVBrowseClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const [genres, setGenres] = useState<Genre[]>(propGenres);
   const [shows, setShows] = useState<TVShow[]>(initialShows);
   const [page, setPage] = useState(initialPage);
   const [sort, setSort] = useState(initialSort);
   const [genreId, setGenreId] = useState<number | undefined>(initialGenreId);
   const [totalPages, setTotalPages] = useState(initialTotalPages);
   const [totalResults, setTotalResults] = useState(initialTotalResults);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(initialShows.length === 0);
   const [sortOpen, setSortOpen] = useState(false);
 
   const sortRef = useRef<HTMLDivElement>(null);
+
+  // Fetch genres if not provided
+  useEffect(() => {
+    if (genres.length === 0) {
+      getTVGenres()
+        .catch(() => getGenres())
+        .then((g) => setGenres(g))
+        .catch(() => {});
+    }
+  }, [genres.length]);
 
   // Close sort dropdown when clicking outside
   useEffect(() => {
@@ -72,19 +85,27 @@ export default function TVBrowseClient({
 
   // Fetch TV shows when filter/sort/page change
   useEffect(() => {
-    if (page === initialPage && sort === initialSort && genreId === initialGenreId) return;
+    const cacheKey = `${page}_${sort}_${genreId || 'all'}`;
+    if (tvClientCache.has(cacheKey)) {
+      const cached = tvClientCache.get(cacheKey);
+      setShows(cached.results);
+      setTotalPages(Math.min(cached.total_pages, 20));
+      setTotalResults(cached.total_results);
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     discoverTVShows(page, sort, genreId)
       .then((data) => {
+        tvClientCache.set(cacheKey, data);
         setShows(data.results);
         setTotalPages(Math.min(data.total_pages, 20));
         setTotalResults(data.total_results);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
       })
       .catch(() => setShows([]))
       .finally(() => setLoading(false));
-  }, [page, sort, genreId, initialPage, initialSort, initialGenreId]);
+  }, [page, sort, genreId]);
 
   const updateUrl = (newPage: number, newSort: string, newGenreId?: number) => {
     const params = new URLSearchParams();
@@ -184,10 +205,10 @@ export default function TVBrowseClient({
         </div>
 
         {/* ── Browse by Genre Filter ── */}
-        {allGenres.length > 0 && (
+        {genres.length > 0 && (
           <div className="mb-8">
             <GenreFilter
-              genres={allGenres}
+              genres={genres}
               activeGenreId={genreId}
               type="tv"
               allHref="/tv/browse"

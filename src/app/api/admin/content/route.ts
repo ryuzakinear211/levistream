@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { slugify, cleanVideoUrl, extractTmdbIdAndType } from '@/lib/urls';
 import {
   saveGitHubFile,
@@ -51,6 +51,11 @@ function revalidateAll() {
   try {
     memoryCache.clear();
     getContentProvider().invalidateCache();
+    // @ts-ignore
+    if (typeof revalidateTag === 'function') {
+      // @ts-ignore
+      revalidateTag('github-content');
+    }
     revalidatePath('/', 'layout');
     revalidatePath('/', 'page');
     revalidatePath('/movie', 'page');

@@ -38,7 +38,7 @@ export async function getGitHubFile(filePath: string, options: GitHubOptions = {
       Accept: 'application/vnd.github.v3+json',
       'User-Agent': 'LeviStream-CMS',
     },
-    cache: 'no-store',
+    next: { revalidate: 3600, tags: ['github-content'] },
   });
 
   if (!res.ok) {
@@ -192,7 +192,7 @@ export async function getGitHubRawFile(filePath: string, options: GitHubOptions 
 
     const res = await fetch(apiUrl, {
       headers,
-      cache: 'no-store',
+      next: { revalidate: 3600, tags: ['github-content'] },
     });
     if (res.ok) {
       const text = await res.text();
@@ -206,7 +206,7 @@ export async function getGitHubRawFile(filePath: string, options: GitHubOptions 
   try {
     const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${cleanPath}`;
     const res = await fetch(rawUrl, {
-      cache: 'no-store',
+      next: { revalidate: 3600, tags: ['github-content'] },
     });
     if (res.ok) {
       const text = await res.text();
@@ -238,8 +238,8 @@ export async function listGitHubDir(dirPath: string, options: GitHubOptions = {}
   }
 
   try {
-    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${cleanPath}?ref=${branch}&_t=${Date.now()}`;
-    const res = await fetch(url, { headers, cache: 'no-store' });
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${cleanPath}?ref=${branch}`;
+    const res = await fetch(url, { headers, next: { revalidate: 3600, tags: ['github-content'] } });
     if (res.ok) {
       const items = await res.json();
       if (Array.isArray(items)) {
@@ -278,8 +278,8 @@ export async function getGitHubTree(options: GitHubOptions = {}): Promise<GitHub
   }
 
   try {
-    const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1&_t=${Date.now()}`;
-    const res = await fetch(url, { headers, cache: 'no-store' });
+    const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`;
+    const res = await fetch(url, { headers, next: { revalidate: 3600, tags: ['github-content'] } });
     if (res.ok) {
       const data = await res.json();
       if (data && Array.isArray(data.tree)) {
@@ -311,7 +311,7 @@ export async function getGitHubBlob(sha: string, options: GitHubOptions = {}): P
 
   try {
     const url = `https://api.github.com/repos/${owner}/${repo}/git/blobs/${sha}`;
-    const res = await fetch(url, { headers, cache: 'no-store' });
+    const res = await fetch(url, { headers, next: { revalidate: 3600, tags: ['github-content'] } });
     if (res.ok) {
       return await res.text();
     }

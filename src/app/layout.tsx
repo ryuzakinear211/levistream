@@ -38,6 +38,8 @@ export const metadata: Metadata = {
   },
 };
 
+import TopProgressBar from '@/components/TopProgressBar';
+
 export default async function RootLayout({
   children,
 }: {
@@ -59,6 +61,7 @@ export default async function RootLayout({
           minHeight: '100vh',
         }}
       >
+        <TopProgressBar />
         <AppLayout genres={genres}>
           {children}
         </AppLayout>
