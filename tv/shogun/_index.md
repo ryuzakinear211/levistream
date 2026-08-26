@@ -1,9 +1,13 @@
 ---
-title: "Shōgun (Limited Series Edition)"
+title: Shōgun (Limited Series Edition)
 tmdb_id: 126308
 rating: 9.9
-deskripsi: "Di Jepang abad ke-17 pada masa awal perang saudara yang menentukan abad tersebut, Lord Yoshii Toranaga berjuang untuk bertahan hidup ketika musuh-musuhnya di Dewan Bupati bersatu melawannya."
-image_url: "https://image.tmdb.org/t/p/w1280/7O4iVfOMQmdCSxhOg1WnzG1AgYT.jpg"
+deskripsi: >-
+  Di Jepang abad ke-17 pada masa awal perang saudara yang menentukan abad
+  tersebut, Lord Yoshii Toranaga berjuang untuk bertahan hidup ketika
+  musuh-musuhnya di Dewan Bupati bersatu melawannya.
+image_url: 'https://image.tmdb.org/t/p/w1280/7O4iVfOMQmdCSxhOg1WnzG1AgYT.jpg'
+featured: true
 ---
 
 # ⚔️ Shōgun - Limited Series Edition (Flat Episode Layout)
