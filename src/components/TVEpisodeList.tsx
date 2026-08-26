@@ -87,19 +87,6 @@ function EpisodeRowItem({
           </div>
         )}
 
-        {/* Play Icon Hover Overlay */}
-        <div className="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-          <div
-            className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center transition-transform group-hover:scale-110 shadow-lg"
-            style={{
-              background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
-              color: 'white',
-            }}
-          >
-            <Play size={11} fill="white" className="ml-0.5" />
-          </div>
-        </div>
-
         {/* Duration Badge */}
         {ep.duration && (
           <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-sm text-[9px] sm:text-[10px] font-bold text-slate-200">

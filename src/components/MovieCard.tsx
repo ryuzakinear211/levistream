@@ -34,7 +34,7 @@ export default function MovieCard({ item, type = 'movie' }: MovieCardProps) {
       className="group block w-full select-none"
     >
       {/* ── Poster Wrapper ── */}
-      <div className="relative aspect-[2/3] w-full rounded-xl sm:rounded-2xl overflow-hidden bg-[#0c1224] border border-white/10 group-hover:border-cyan-500/50 shadow-md group-hover:shadow-[0_12px_32px_rgba(0,0,0,0.7),0_0_20px_rgba(6,182,212,0.25)] transition-all duration-300 transform group-hover:-translate-y-1.5">
+      <div className="relative aspect-[2/3] w-full rounded-xl sm:rounded-2xl overflow-hidden bg-[#0c1224] border border-white/10 shadow-md group-hover:shadow-xl transition-all duration-300 transform group-hover:-translate-y-1.5">
         {/* Poster Image */}
         {imagePath && !imgError ? (
           <Image
@@ -71,13 +71,6 @@ export default function MovieCard({ item, type = 'movie' }: MovieCardProps) {
               <span>Movie</span>
             </>
           )}
-        </div>
-
-        {/* ── Hover Play Overlay (Crystal clear poster, no blur) ── */}
-        <div className="absolute inset-0 z-20 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-cyan-500 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-cyan-500/40 transform scale-75 group-hover:scale-100 transition-transform duration-300">
-            <Play size={18} fill="white" className="ml-0.5" />
-          </div>
         </div>
       </div>
 

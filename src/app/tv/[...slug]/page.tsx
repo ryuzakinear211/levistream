@@ -283,7 +283,7 @@ export default async function TVShowPage({ params }: PageProps) {
             />
           </div>
 
-          {/* Similar TV Shows */}
+          {/* Recommended TV Shows */}
           {similarShows.length > 0 && (
             <section className="mt-12 w-full px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 2xl:px-14">
               <div className="flex items-center gap-2.5 mb-5">
@@ -297,14 +297,9 @@ export default async function TVShowPage({ params }: PageProps) {
                 >
                   <Sparkles size={16} className="text-pink-400" />
                 </div>
-                <div>
-                  <h2 className="text-base sm:text-lg font-black text-white tracking-tight">
-                    Similar TV Shows
-                  </h2>
-                  <p className="text-[11px] text-slate-400">
-                    Recommendations tailored for you
-                  </p>
-                </div>
+                <h2 className="text-base sm:text-lg font-black text-white tracking-tight">
+                  Recommended TV
+                </h2>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-4">
@@ -490,7 +485,7 @@ export default async function TVShowPage({ params }: PageProps) {
             />
           )}
 
-          {/* Similar TV Shows (Grid) */}
+          {/* Recommended TV Shows (Grid) */}
           {similarShows.length > 0 && (
             <section className="mt-12 w-full px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 2xl:px-14">
               <div className="flex items-center gap-2.5 mb-5">
@@ -504,14 +499,9 @@ export default async function TVShowPage({ params }: PageProps) {
                 >
                   <Sparkles size={16} className="text-pink-400" />
                 </div>
-                <div>
-                  <h2 className="text-base sm:text-lg font-black text-white tracking-tight">
-                    Similar TV Shows
-                  </h2>
-                  <p className="text-[11px] text-slate-400">
-                    Recommendations tailored for you
-                  </p>
-                </div>
+                <h2 className="text-base sm:text-lg font-black text-white tracking-tight">
+                  Recommended TV
+                </h2>
               </div>
 
               <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3.5 sm:gap-4.5 md:gap-5">

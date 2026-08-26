@@ -2,7 +2,7 @@ import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Metadata } from 'next';
-import { Calendar, Clock, Globe, Clapperboard, Users, ChevronLeft } from 'lucide-react';
+import { Calendar, Clock, Globe, Clapperboard, Users, ChevronLeft, Sparkles } from 'lucide-react';
 import { getImageUrl } from '@/lib/tmdb';
 import {
   getMovieDetailsWithCustomOverride,
@@ -498,7 +498,7 @@ export default async function MovieDetailPage({ params }: PageProps) {
         </section>
       )}
 
-      {/* ── 5. SIMILAR MOVIES (GRID LAYOUT WITH ATTRACTIVE ICON) ── */}
+      {/* ── 5. RECOMMENDED MOVIES (GRID LAYOUT WITH ATTRACTIVE ICON) ── */}
       {similarMovies.length > 0 && (
         <section className="mt-12 w-full px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 2xl:px-14">
           <div className="flex items-center gap-2.5 mb-5">
@@ -510,16 +510,11 @@ export default async function MovieDetailPage({ params }: PageProps) {
                 boxShadow: '0 0 15px rgba(6, 182, 212, 0.2)',
               }}
             >
-              <Clapperboard size={16} className="text-cyan-400" />
+              <Sparkles size={16} className="text-cyan-400" />
             </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-black text-white tracking-tight">
-                Similar Movies
-              </h2>
-              <p className="text-[11px] text-slate-400">
-                Recommendations tailored for you
-              </p>
-            </div>
+            <h2 className="text-base sm:text-lg font-black text-white tracking-tight">
+              Recommended Movies
+            </h2>
           </div>
 
           <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3.5 sm:gap-4.5 md:gap-5">
