@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import {
   Edit2,
   X,
@@ -239,28 +240,45 @@ export const EditModal: React.FC<EditModalProps> = ({
       .map((l) => l.trim())
       .filter(Boolean);
 
-    const newEps: EditableEpisode[] = lines.map((url, idx) => {
-      const epNum = idx + 1;
-      return {
-        id: `batch_ep_${Date.now()}_${epNum}`,
-        seasonFolder: season,
-        slug: `e${epNum}`,
-        title: `Episode ${epNum}`,
-        videourl: cleanVideoUrl(url) || url,
-        image_url: editingItem.frontmatter?.image_url || '',
-        subtitles: '',
-        duration: '',
-      };
-    });
+    if (lines.length === 0) return;
 
-    setEpisodesList((prev) => [
-      ...prev.filter((ep) => ep.seasonFolder !== season),
-      ...newEps,
-    ]);
+    setEpisodesList((prev) => {
+      const seasonEps = prev.filter((ep) => ep.seasonFolder === season && !ep.deleted);
+      const otherEps = prev.filter((ep) => ep.seasonFolder !== season || ep.deleted);
+
+      const totalCount = Math.max(seasonEps.length, lines.length);
+      const updatedSeasonEps: EditableEpisode[] = [];
+
+      for (let i = 0; i < totalCount; i++) {
+        const epNum = i + 1;
+        const lineUrl = i < lines.length ? cleanVideoUrl(lines[i]) || lines[i] : null;
+        const existingEp = seasonEps[i];
+
+        if (existingEp) {
+          updatedSeasonEps.push({
+            ...existingEp,
+            videourl: lineUrl !== null ? lineUrl : existingEp.videourl,
+          });
+        } else {
+          updatedSeasonEps.push({
+            id: `batch_ep_${Date.now()}_${epNum}`,
+            seasonFolder: season,
+            slug: `e${epNum}`,
+            title: `Episode ${epNum}`,
+            videourl: lineUrl || '',
+            image_url: editingItem.frontmatter?.image_url || '',
+            subtitles: '',
+            duration: '',
+          });
+        }
+      }
+
+      return [...otherEps, ...updatedSeasonEps];
+    });
 
     setBatchUrlsText('');
     setBatchInputSeason(null);
-    showToast(`${lines.length} episode diterapkan ke ${season.toUpperCase()}`);
+    showToast(`${lines.length} URL video berhasil diterapkan dari baris 1 s/d ${lines.length} di ${season.toUpperCase()}!`, 'success');
   };
 
   return (
@@ -391,58 +409,66 @@ export const EditModal: React.FC<EditModalProps> = ({
                     Image Player & Generic Content (image_url)
                   </label>
                   {tmdbPreview?.backdrops && tmdbPreview.backdrops.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveEpBackdropId(null);
-                        setShowBackdropPicker(!showBackdropPicker);
+                      <button
+                        type="button"
+                        onClick={() => setShowBackdropPicker(!showBackdropPicker)}
+                        className="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                      >
+                        <ImageIcon size={12} />
+                        <span>
+                          {showBackdropPicker ? 'Tutup Galeri' : `Pilih dari Galeri (${tmdbPreview.backdrops.length})`}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {editingItem.frontmatter.image_url && (
+                      <div className="relative w-12 h-8 rounded-lg overflow-hidden border border-cyan-500/40 flex-shrink-0 bg-black/60">
+                        <Image
+                          src={editingItem.frontmatter.image_url}
+                          alt="Series Poster"
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      </div>
+                    )}
+                    <input
+                      type="text"
+                      value={editingItem.frontmatter.image_url || ''}
+                      onChange={(e) => updateFrontmatter('image_url', e.target.value)}
+                      placeholder="https://image.tmdb.org/t/p/... atau URL gambar kustom"
+                      className="w-full px-3.5 py-2.5 sm:py-3 bg-black/50 border border-white/10 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-cyan-500 min-h-[42px]"
+                    />
+                    {editingItem.frontmatter.image_url && (
+                      <button
+                        type="button"
+                        onClick={() => updateFrontmatter('image_url', '')}
+                        className="p-2 text-slate-400 hover:text-red-400"
+                        title="Hapus Image"
+                      >
+                        <X size={15} />
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Khusus digunakan untuk poster video player & JSON-LD thumbnailUrl (tidak mengubah poster utama di homepage).
+                  </p>
+
+                  {showBackdropPicker && tmdbPreview?.backdrops && (
+                    <BackdropPicker
+                      backdrops={tmdbPreview.backdrops}
+                      selectedUrl={editingItem.frontmatter.image_url}
+                      title="Pilih Backdrop untuk Player Series"
+                      onSelect={(url) => {
+                        updateFrontmatter('image_url', url);
+                        setShowBackdropPicker(false);
+                        showToast('Backdrop series diterapkan!');
                       }}
-                      className="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
-                    >
-                      <ImageIcon size={12} />
-                      <span>
-                        {showBackdropPicker ? 'Tutup Galeri' : `Pilih dari Galeri (${tmdbPreview.backdrops.length})`}
-                      </span>
-                    </button>
+                      onClose={() => setShowBackdropPicker(false)}
+                    />
                   )}
                 </div>
-                <input
-                  type="text"
-                  value={editingItem.frontmatter.image_url || ''}
-                  onChange={(e) => updateFrontmatter('image_url', e.target.value)}
-                  placeholder="https://image.tmdb.org/t/p/... atau URL gambar kustom"
-                  className="w-full px-3.5 py-2.5 sm:py-3 bg-black/50 border border-white/10 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-cyan-500 min-h-[42px]"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Khusus digunakan untuk poster video player & JSON-LD thumbnailUrl (tidak mengubah poster utama di homepage).
-                </p>
-
-                {showBackdropPicker && tmdbPreview?.backdrops && (
-                  <BackdropPicker
-                    backdrops={tmdbPreview.backdrops}
-                    selectedUrl={
-                      activeEpBackdropId
-                        ? episodesList.find((ep) => ep.id === activeEpBackdropId)?.image_url
-                        : editingItem.frontmatter.image_url
-                    }
-                    onSelect={(url) => {
-                      if (activeEpBackdropId) {
-                        handleUpdateEpisode(activeEpBackdropId, 'image_url', url);
-                        setActiveEpBackdropId(null);
-                        showToast('Backdrop episode berhasil dipilih!');
-                      } else {
-                        updateFrontmatter('image_url', url);
-                        showToast('Backdrop series berhasil dipilih!');
-                      }
-                      setShowBackdropPicker(false);
-                    }}
-                    onClose={() => {
-                      setShowBackdropPicker(false);
-                      setActiveEpBackdropId(null);
-                    }}
-                  />
-                )}
-              </div>
 
               {/* Rating, Featured, Duration, Subtitles */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -695,28 +721,69 @@ export const EditModal: React.FC<EditModalProps> = ({
                                     {tmdbPreview?.backdrops && tmdbPreview.backdrops.length > 0 && (
                                       <button
                                         type="button"
-                                        onClick={() => {
-                                          setActiveEpBackdropId(ep.id);
-                                          setShowBackdropPicker(true);
-                                        }}
+                                        onClick={() =>
+                                          setActiveEpBackdropId(
+                                            activeEpBackdropId === ep.id ? null : ep.id
+                                          )
+                                        }
                                         className="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
                                       >
                                         <ImageIcon size={11} />
-                                        <span>Pilih TMDB</span>
+                                        <span>
+                                          {activeEpBackdropId === ep.id ? 'Tutup Galeri' : 'Pilih TMDB'}
+                                        </span>
                                       </button>
                                     )}
                                   </div>
-                                  <input
-                                    type="text"
-                                    value={ep.image_url}
-                                    onChange={(e) =>
-                                      handleUpdateEpisode(ep.id, 'image_url', e.target.value)
-                                    }
-                                    placeholder="https://image.tmdb.org/..."
-                                    className="w-full px-3 py-2 bg-black/60 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-purple-400 min-h-[40px]"
-                                  />
+                                  <div className="flex items-center gap-1.5 bg-black/60 border border-white/10 rounded-xl px-2.5 py-1.5 focus-within:border-purple-400 min-h-[40px]">
+                                    {ep.image_url && (
+                                      <div className="relative w-8 h-5 rounded overflow-hidden flex-shrink-0 border border-purple-500/40 bg-black/60">
+                                        <Image
+                                          src={ep.image_url}
+                                          alt="Thumb"
+                                          fill
+                                          className="object-cover"
+                                          unoptimized
+                                        />
+                                      </div>
+                                    )}
+                                    <input
+                                      type="text"
+                                      value={ep.image_url}
+                                      onChange={(e) =>
+                                        handleUpdateEpisode(ep.id, 'image_url', e.target.value)
+                                      }
+                                      placeholder="https://image.tmdb.org/... atau URL gambar"
+                                      className="w-full bg-transparent text-xs text-white focus:outline-none"
+                                    />
+                                    {ep.image_url && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateEpisode(ep.id, 'image_url', '')}
+                                        className="text-slate-400 hover:text-red-400 p-0.5"
+                                        title="Hapus gambar episode"
+                                      >
+                                        <X size={13} />
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
+
+                              {/* Inline Backdrop Picker for this specific episode */}
+                              {activeEpBackdropId === ep.id && tmdbPreview?.backdrops && (
+                                <BackdropPicker
+                                  backdrops={tmdbPreview.backdrops}
+                                  selectedUrl={ep.image_url}
+                                  title={`Pilih Backdrop untuk ${ep.title || ep.slug.toUpperCase()}`}
+                                  onSelect={(url) => {
+                                    handleUpdateEpisode(ep.id, 'image_url', url);
+                                    setActiveEpBackdropId(null);
+                                    showToast(`Backdrop diterapkan ke ${ep.title || ep.slug.toUpperCase()}!`, 'success');
+                                  }}
+                                  onClose={() => setActiveEpBackdropId(null)}
+                                />
+                              )}
                             </div>
                           ))}
                         </div>

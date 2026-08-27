@@ -88,10 +88,10 @@ export const CreateModal: React.FC<CreateModalProps> = ({
   // TMDB Live Preview & Backdrops
   const [tmdbPreview, setTmdbPreview] = useState<TMDBPreviewData | null>(null);
   const [fetchingTmdb, setFetchingTmdb] = useState(false);
-  const [showBackdropPicker, setShowBackdropPicker] = useState(false);
-  const [activeEpisodeDraftId, setActiveEpisodeDraftId] = useState<string | null>(null);
+  const [showSeriesBackdropPicker, setShowSeriesBackdropPicker] = useState(false);
+  const [activeEpisodeBackdropId, setActiveEpisodeBackdropId] = useState<string | null>(null);
   const [batchUrlsInput, setBatchUrlsInput] = useState('');
-  const [showBatchUrlInput, setShowBatchUrlInput] = useState(false);
+  const [batchSeasonId, setBatchSeasonId] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -112,7 +112,10 @@ export const CreateModal: React.FC<CreateModalProps> = ({
       setSearchResults([]);
       setSelectedTmdbResult(null);
       setTmdbPreview(null);
-      setShowBackdropPicker(false);
+      setShowSeriesBackdropPicker(false);
+      setActiveEpisodeBackdropId(null);
+      setBatchUrlsInput('');
+      setBatchSeasonId(null);
       setFormErrors({});
       setFormSeasons([
         {
@@ -276,27 +279,42 @@ export const CreateModal: React.FC<CreateModalProps> = ({
       .map((l) => l.trim())
       .filter(Boolean);
 
+    if (lines.length === 0) return;
+
     setFormSeasons((prev) =>
       prev.map((s) => {
         if (s.id !== seasonId) return s;
-        const newEps = lines.map((url, idx) => {
-          const epNum = idx + 1;
-          const cleanUrl = cleanVideoUrl(url) || url;
-          return {
-            id: `ep_batch_${Date.now()}_${epNum}`,
-            episode: `e${epNum}`,
-            videourl: cleanUrl,
-            title: `Episode ${epNum}`,
-            image_url: formPoster || '',
-          };
-        });
-        return { ...s, episodes: newEps };
+        const currentEps = s.episodes || [];
+        const totalCount = Math.max(currentEps.length, lines.length);
+        const updatedEps = [];
+
+        for (let i = 0; i < totalCount; i++) {
+          const epNum = i + 1;
+          const lineUrl = i < lines.length ? cleanVideoUrl(lines[i]) || lines[i] : null;
+          const existingEp = currentEps[i];
+
+          if (existingEp) {
+            updatedEps.push({
+              ...existingEp,
+              videourl: lineUrl !== null ? lineUrl : existingEp.videourl,
+            });
+          } else {
+            updatedEps.push({
+              id: `ep_batch_${Date.now()}_${epNum}`,
+              episode: `e${epNum}`,
+              videourl: lineUrl || '',
+              title: `Episode ${epNum}`,
+              image_url: formPoster || '',
+            });
+          }
+        }
+        return { ...s, episodes: updatedEps };
       })
     );
 
     setBatchUrlsInput('');
-    setShowBatchUrlInput(false);
-    showToast(`${lines.length} episode berhasil ditambahkan!`);
+    setBatchSeasonId(null);
+    showToast(`${lines.length} URL video berhasil diterapkan dari baris 1 s/d ${lines.length}!`, 'success');
   };
 
   const modalTitle =
@@ -615,53 +633,61 @@ export const CreateModal: React.FC<CreateModalProps> = ({
               {tmdbPreview?.backdrops && tmdbPreview.backdrops.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setActiveEpisodeDraftId(null);
-                    setShowBackdropPicker(!showBackdropPicker);
-                  }}
+                  onClick={() => setShowSeriesBackdropPicker(!showSeriesBackdropPicker)}
                   className="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
                 >
                   <ImageIcon size={12} />
                   <span>
-                    {showBackdropPicker ? 'Tutup Galeri' : `Pilih dari Galeri (${tmdbPreview.backdrops.length})`}
+                    {showSeriesBackdropPicker ? 'Tutup Galeri' : `Pilih dari Galeri (${tmdbPreview.backdrops.length})`}
                   </span>
                 </button>
               )}
             </div>
-            <input
-              type="text"
-              value={formPoster}
-              onChange={(e) => setFormPoster(e.target.value)}
-              placeholder="https://image.tmdb.org/t/p/... atau URL gambar kustom"
-              className="w-full px-3.5 py-2.5 sm:py-3 bg-black/50 border border-white/10 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 min-h-[42px]"
-            />
+            <div className="flex items-center gap-2">
+              {formPoster && (
+                <div className="relative w-12 h-8 rounded-lg overflow-hidden border border-cyan-500/40 flex-shrink-0 bg-black/60">
+                  <Image
+                    src={formPoster}
+                    alt="Series Poster"
+                    fill
+                    className="object-cover"
+                    unoptimized
+                  />
+                </div>
+              )}
+              <input
+                type="text"
+                value={formPoster}
+                onChange={(e) => setFormPoster(e.target.value)}
+                placeholder="https://image.tmdb.org/t/p/... atau URL gambar kustom"
+                className="w-full px-3.5 py-2.5 sm:py-3 bg-black/50 border border-white/10 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 min-h-[42px]"
+              />
+              {formPoster && (
+                <button
+                  type="button"
+                  onClick={() => setFormPoster('')}
+                  className="p-2 text-slate-400 hover:text-red-400"
+                  title="Hapus Image"
+                >
+                  <X size={15} />
+                </button>
+              )}
+            </div>
             <p className="text-[10px] text-slate-400 mt-1">
               Khusus digunakan untuk poster video player & JSON-LD thumbnailUrl (tidak mengubah poster utama di homepage).
             </p>
 
-            {showBackdropPicker && tmdbPreview?.backdrops && (
+            {showSeriesBackdropPicker && tmdbPreview?.backdrops && (
               <BackdropPicker
                 backdrops={tmdbPreview.backdrops}
                 selectedUrl={formPoster}
+                title="Pilih Backdrop untuk Player Series"
                 onSelect={(url) => {
-                  if (activeEpisodeDraftId) {
-                    setFormSeasons((prev) =>
-                      prev.map((s) => ({
-                        ...s,
-                        episodes: s.episodes.map((ep) =>
-                          ep.id === activeEpisodeDraftId ? { ...ep, image_url: url } : ep
-                        ),
-                      }))
-                    );
-                    setActiveEpisodeDraftId(null);
-                    showToast('Backdrop episode diterapkan!');
-                  } else {
-                    setFormPoster(url);
-                    showToast('Backdrop series diterapkan!');
-                  }
-                  setShowBackdropPicker(false);
+                  setFormPoster(url);
+                  setShowSeriesBackdropPicker(false);
+                  showToast('Backdrop series diterapkan!');
                 }}
-                onClose={() => setShowBackdropPicker(false)}
+                onClose={() => setShowSeriesBackdropPicker(false)}
               />
             )}
           </div>
@@ -754,209 +780,305 @@ export const CreateModal: React.FC<CreateModalProps> = ({
                 </button>
               </div>
 
-              {formSeasons.map((season, sIdx) => (
-                <div
-                  key={season.id}
-                  className="p-3.5 rounded-xl bg-black/30 border border-white/5 space-y-3"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs sm:text-sm font-bold text-pink-300">Season {sIdx + 1}</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowBatchUrlInput(!showBatchUrlInput)}
-                      className="text-xs font-bold text-cyan-400 hover:text-cyan-300"
-                    >
-                      {showBatchUrlInput ? 'Tutup Batch Paste' : 'Batch Paste URLs'}
-                    </button>
-                  </div>
-
-                  {showBatchUrlInput && (
-                    <div className="p-3 rounded-lg bg-black/50 border border-cyan-500/30 space-y-2">
-                      <label className="block text-xs font-bold text-cyan-300">
-                        Paste URL Video Stream (1 URL per baris)
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={batchUrlsInput}
-                        onChange={(e) => setBatchUrlsInput(e.target.value)}
-                        placeholder="Paste URL video per baris (baris 1 = Ep 1, baris 2 = Ep 2)..."
-                        className="w-full p-2.5 bg-black/60 border border-white/10 rounded-lg text-xs text-white font-mono"
-                      />
+              {formSeasons.map((season, sIdx) => {
+                const isBatchOpen = batchSeasonId === season.id;
+                return (
+                  <div
+                    key={season.id}
+                    className="p-3.5 rounded-xl bg-black/30 border border-white/5 space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs sm:text-sm font-bold text-pink-300">
+                          Season {sIdx + 1}
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-semibold">
+                          ({season.episodes.length} Episode)
+                        </span>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => handleApplyBatchUrls(season.id)}
-                        className="px-3.5 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs rounded-md"
+                        onClick={() => setBatchSeasonId(isBatchOpen ? null : season.id)}
+                        className="text-xs font-bold text-cyan-400 hover:text-cyan-300"
                       >
-                        Terapkan ke Season Ini
+                        {isBatchOpen ? 'Tutup Batch Paste' : 'Batch Paste URLs'}
                       </button>
                     </div>
-                  )}
 
-                  {/* Individual Episode Rows with Title & Video URL controls */}
-                  <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
-                    {season.episodes.map((ep, eIdx) => (
-                      <div
-                        key={ep.id}
-                        className="p-3 rounded-xl bg-black/50 border border-white/10 space-y-2"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 flex-1">
-                            <span className="w-8 text-center font-mono text-xs font-black text-pink-400 bg-pink-500/10 rounded-lg py-1 border border-pink-500/20">
-                              {ep.episode.toUpperCase()}
-                            </span>
-                            <input
-                              type="text"
-                              value={ep.title}
-                              onChange={(e) =>
+                    {isBatchOpen && (
+                      <div className="p-3 rounded-lg bg-black/50 border border-cyan-500/30 space-y-2 animate-fade-in">
+                        <label className="block text-xs font-bold text-cyan-300">
+                          Paste URL Video Stream (1 URL per baris — Baris 1 mengisi Ep 1, Baris 2 mengisi Ep 2, dst)
+                        </label>
+                        <textarea
+                          rows={4}
+                          value={batchUrlsInput}
+                          onChange={(e) => setBatchUrlsInput(e.target.value)}
+                          placeholder={`https://server.com/s${sIdx + 1}-e1.mp4\nhttps://server.com/s${sIdx + 1}-e2.mp4\nhttps://server.com/s${sIdx + 1}-e3.mp4`}
+                          className="w-full p-2.5 bg-black/60 border border-white/10 rounded-lg text-xs text-white font-mono focus:outline-none focus:border-cyan-400"
+                        />
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-slate-400">
+                            {batchUrlsInput.split('\n').filter((l) => l.trim()).length} baris URL terdeteksi
+                          </span>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setBatchSeasonId(null)}
+                              className="px-3 py-1.5 text-xs text-slate-400 hover:text-white"
+                            >
+                              Batal
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleApplyBatchUrls(season.id)}
+                              className="px-3.5 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs rounded-md shadow-md"
+                            >
+                              Terapkan ke Season {sIdx + 1}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Individual Episode Rows */}
+                    <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                      {season.episodes.map((ep, eIdx) => (
+                        <div
+                          key={ep.id}
+                          className="p-3 sm:p-3.5 rounded-xl bg-black/50 border border-white/10 space-y-2.5 hover:border-pink-500/30 transition-all"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-1">
+                              <span className="w-8 text-center font-mono text-xs font-black text-pink-400 bg-pink-500/10 rounded-lg py-1.5 border border-pink-500/20">
+                                {ep.episode.toUpperCase()}
+                              </span>
+                              <input
+                                type="text"
+                                value={ep.title}
+                                onChange={(e) =>
+                                  setFormSeasons((prev) =>
+                                    prev.map((s) =>
+                                      s.id === season.id
+                                        ? {
+                                            ...s,
+                                            episodes: s.episodes.map((item) =>
+                                              item.id === ep.id
+                                                ? { ...item, title: e.target.value }
+                                                : item
+                                            ),
+                                          }
+                                        : s
+                                    )
+                                  )
+                                }
+                                placeholder={`Judul Episode ${eIdx + 1}`}
+                                className="px-3 py-1.5 bg-black/60 border border-white/10 rounded-lg text-xs font-bold text-white focus:outline-none focus:border-pink-400 flex-1 min-h-[36px]"
+                              />
+                            </div>
+
+                            {season.episodes.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setFormSeasons((prev) =>
+                                    prev.map((s) =>
+                                      s.id === season.id
+                                        ? {
+                                            ...s,
+                                            episodes: s.episodes.filter((item) => item.id !== ep.id),
+                                          }
+                                        : s
+                                    )
+                                  )
+                                }
+                                className="p-1.5 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                title="Hapus Episode"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <div>
+                              <label className="block text-[11px] text-slate-400 font-bold mb-1">
+                                URL Video Stream <span className="text-red-400">*</span>
+                              </label>
+                              <div className="flex items-center gap-1.5 bg-black/70 border border-white/10 rounded-lg px-2.5 py-1.5 focus-within:border-cyan-400 min-h-[38px]">
+                                <Play size={12} className="text-cyan-400 flex-shrink-0" />
+                                <input
+                                  type="text"
+                                  value={ep.videourl}
+                                  onChange={(e) =>
+                                    setFormSeasons((prev) =>
+                                      prev.map((s) =>
+                                        s.id === season.id
+                                          ? {
+                                              ...s,
+                                              episodes: s.episodes.map((item) =>
+                                                item.id === ep.id
+                                                  ? { ...item, videourl: e.target.value }
+                                                  : item
+                                              ),
+                                            }
+                                          : s
+                                      )
+                                    )
+                                  }
+                                  placeholder="https://server.com/video.mp4"
+                                  className="w-full bg-transparent text-xs text-white font-mono focus:outline-none"
+                                />
+                              </div>
+                              {formErrors[`ep_video_${ep.id}`] && (
+                                <p className="text-[10px] text-red-400 mt-0.5">{formErrors[`ep_video_${ep.id}`]}</p>
+                              )}
+                            </div>
+
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="text-[11px] text-slate-400 font-bold">
+                                  Image Player & Thumbnail (image_url)
+                                </label>
+                                {tmdbPreview?.backdrops && tmdbPreview.backdrops.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setActiveEpisodeBackdropId(
+                                        activeEpisodeBackdropId === ep.id ? null : ep.id
+                                      )
+                                    }
+                                    className="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                                  >
+                                    <ImageIcon size={11} />
+                                    <span>
+                                      {activeEpisodeBackdropId === ep.id ? 'Tutup Galeri' : 'Pilih TMDB'}
+                                    </span>
+                                  </button>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 bg-black/70 border border-white/10 rounded-lg px-2.5 py-1.5 focus-within:border-pink-400 min-h-[38px]">
+                                {ep.image_url && (
+                                  <div className="relative w-7 h-5 rounded overflow-hidden flex-shrink-0 border border-pink-500/40 bg-black/60">
+                                    <Image
+                                      src={ep.image_url}
+                                      alt="Thumb"
+                                      fill
+                                      className="object-cover"
+                                      unoptimized
+                                    />
+                                  </div>
+                                )}
+                                <input
+                                  type="text"
+                                  value={ep.image_url || ''}
+                                  onChange={(e) =>
+                                    setFormSeasons((prev) =>
+                                      prev.map((s) =>
+                                        s.id === season.id
+                                          ? {
+                                              ...s,
+                                              episodes: s.episodes.map((item) =>
+                                                item.id === ep.id
+                                                  ? { ...item, image_url: e.target.value }
+                                                  : item
+                                              ),
+                                            }
+                                          : s
+                                      )
+                                    )
+                                  }
+                                  placeholder="https://image.tmdb.org/... atau URL kustom"
+                                  className="w-full bg-transparent text-xs text-white focus:outline-none"
+                                />
+                                {ep.image_url && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setFormSeasons((prev) =>
+                                        prev.map((s) =>
+                                          s.id === season.id
+                                            ? {
+                                                ...s,
+                                                episodes: s.episodes.map((item) =>
+                                                  item.id === ep.id
+                                                    ? { ...item, image_url: '' }
+                                                    : item
+                                                ),
+                                              }
+                                            : s
+                                        )
+                                      )
+                                    }
+                                    className="text-slate-400 hover:text-red-400 p-0.5"
+                                    title="Hapus gambar episode"
+                                  >
+                                    <X size={13} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Inline Backdrop Picker for this specific episode */}
+                          {activeEpisodeBackdropId === ep.id && tmdbPreview?.backdrops && (
+                            <BackdropPicker
+                              backdrops={tmdbPreview.backdrops}
+                              selectedUrl={ep.image_url}
+                              title={`Pilih Backdrop untuk ${ep.title || ep.episode.toUpperCase()}`}
+                              onSelect={(url) => {
                                 setFormSeasons((prev) =>
                                   prev.map((s) =>
                                     s.id === season.id
                                       ? {
                                           ...s,
                                           episodes: s.episodes.map((item) =>
-                                            item.id === ep.id
-                                              ? { ...item, title: e.target.value }
-                                              : item
+                                            item.id === ep.id ? { ...item, image_url: url } : item
                                           ),
                                         }
                                       : s
                                   )
-                                )
-                              }
-                              placeholder={`Judul Episode ${eIdx + 1}`}
-                              className="px-3 py-1.5 bg-black/60 border border-white/10 rounded-lg text-xs font-bold text-white focus:outline-none focus:border-pink-400 flex-1 min-h-[36px]"
+                                );
+                                setActiveEpisodeBackdropId(null);
+                                showToast(`Backdrop diterapkan ke ${ep.title || ep.episode.toUpperCase()}!`, 'success');
+                              }}
+                              onClose={() => setActiveEpisodeBackdropId(null)}
                             />
-                          </div>
-
-                          {season.episodes.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setFormSeasons((prev) =>
-                                  prev.map((s) =>
-                                    s.id === season.id
-                                      ? {
-                                          ...s,
-                                          episodes: s.episodes.filter((item) => item.id !== ep.id),
-                                        }
-                                      : s
-                                  )
-                                )
-                              }
-                              className="p-1.5 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                              title="Hapus Episode"
-                            >
-                              <Trash2 size={14} />
-                            </button>
                           )}
                         </div>
+                      ))}
+                    </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <div>
-                            <div className="flex items-center gap-1.5 bg-black/70 border border-white/10 rounded-lg px-2.5 py-1.5 focus-within:border-cyan-400 min-h-[38px]">
-                              <Play size={12} className="text-cyan-400 flex-shrink-0" />
-                              <input
-                                type="text"
-                                value={ep.videourl}
-                                onChange={(e) =>
-                                  setFormSeasons((prev) =>
-                                    prev.map((s) =>
-                                      s.id === season.id
-                                        ? {
-                                            ...s,
-                                            episodes: s.episodes.map((item) =>
-                                              item.id === ep.id
-                                                ? { ...item, videourl: e.target.value }
-                                                : item
-                                            ),
-                                          }
-                                        : s
-                                    )
-                                  )
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormSeasons((prev) =>
+                          prev.map((s) =>
+                            s.id === season.id
+                              ? {
+                                  ...s,
+                                  episodes: [
+                                    ...s.episodes,
+                                    {
+                                      id: `ep_${Date.now()}_${s.episodes.length + 1}`,
+                                      episode: `e${s.episodes.length + 1}`,
+                                      videourl: '',
+                                      title: `Episode ${s.episodes.length + 1}`,
+                                      image_url: formPoster || '',
+                                    },
+                                  ],
                                 }
-                                placeholder="URL Video stream (MP4 / .m3u8)..."
-                                className="w-full bg-transparent text-xs text-white font-mono focus:outline-none"
-                              />
-                            </div>
-                            {formErrors[`ep_video_${ep.id}`] && (
-                              <p className="text-[10px] text-red-400 mt-0.5">{formErrors[`ep_video_${ep.id}`]}</p>
-                            )}
-                          </div>
-
-                          <div>
-                            <div className="flex items-center gap-1.5 bg-black/70 border border-white/10 rounded-lg px-2.5 py-1.5 focus-within:border-pink-400 min-h-[38px]">
-                              <ImageIcon size={12} className="text-pink-400 flex-shrink-0" />
-                              <input
-                                type="text"
-                                value={ep.image_url || ''}
-                                onChange={(e) =>
-                                  setFormSeasons((prev) =>
-                                    prev.map((s) =>
-                                      s.id === season.id
-                                        ? {
-                                            ...s,
-                                            episodes: s.episodes.map((item) =>
-                                              item.id === ep.id
-                                                ? { ...item, image_url: e.target.value }
-                                                : item
-                                            ),
-                                          }
-                                        : s
-                                    )
-                                  )
-                                }
-                                placeholder="Image URL / Thumbnail..."
-                                className="w-full bg-transparent text-xs text-white focus:outline-none"
-                              />
-                              {tmdbPreview?.backdrops && tmdbPreview.backdrops.length > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveEpisodeDraftId(ep.id);
-                                    setShowBackdropPicker(true);
-                                  }}
-                                  className="text-[10px] font-bold text-pink-400 hover:text-pink-300 whitespace-nowrap"
-                                  title="Pilih gambar dari backdrop TMDB"
-                                >
-                                  TMDB
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setFormSeasons((prev) =>
-                        prev.map((s) =>
-                          s.id === season.id
-                            ? {
-                                ...s,
-                                episodes: [
-                                  ...s.episodes,
-                                  {
-                                    id: `ep_${Date.now()}_${s.episodes.length + 1}`,
-                                    episode: `e${s.episodes.length + 1}`,
-                                    videourl: '',
-                                    title: `Episode ${s.episodes.length + 1}`,
-                                    image_url: formPoster || '',
-                                  },
-                                ],
-                              }
-                            : s
+                              : s
+                          )
                         )
-                      )
-                    }
-                    className="text-xs font-bold text-pink-400 hover:text-pink-300 flex items-center gap-1 pt-1"
-                  >
-                    <Plus size={12} /> Tambah Baris Episode
-                  </button>
-                </div>
-              ))}
+                      }
+                      className="text-xs font-bold text-pink-400 hover:text-pink-300 flex items-center gap-1 pt-1"
+                    >
+                      <Plus size={12} /> Tambah Baris Episode
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
 
