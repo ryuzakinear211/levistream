@@ -21,7 +21,7 @@ import siteConfig from '@/config';
 
 export default function LoginPageClient() {
   const router = useRouter();
-  const { login, user, logout } = useAuth();
+  const { login, register, user, logout } = useAuth();
 
   const [tab, setTab] = useState<'login' | 'register'>('login');
   const [showPassword, setShowPassword] = useState(false);
@@ -56,7 +56,7 @@ export default function LoginPageClient() {
     }
   };
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSuccessMsg('');
     const newErrors: Record<string, string> = {};
@@ -75,29 +75,24 @@ export default function LoginPageClient() {
 
     setErrors({});
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const res = await login(loginIdentifier.trim(), loginPassword);
+      if (res.success) {
+        setSuccessMsg(res.message || 'Login berhasil! Mengalihkan...');
+        setTimeout(() => {
+          router.push('/profile');
+        }, 500);
+      } else {
+        setErrors({ general: res.message || 'Username/Email atau Password salah' });
+      }
+    } catch (err: any) {
+      setErrors({ general: err.message || 'Terjadi kesalahan jaringan' });
+    } finally {
       setLoading(false);
-      const username = loginIdentifier.includes('@')
-        ? loginIdentifier.split('@')[0]
-        : loginIdentifier;
-      const email = loginIdentifier.includes('@')
-        ? loginIdentifier
-        : `${loginIdentifier}@gmail.com`;
-
-      login({
-        username,
-        email,
-        createdAt: new Date().toISOString(),
-      });
-
-      setSuccessMsg(`Selamat datang kembali, ${username}!`);
-      setTimeout(() => {
-        router.push('/');
-      }, 600);
-    }, 400);
+    }
   };
 
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSuccessMsg('');
     const newErrors: Record<string, string> = {};
@@ -133,19 +128,21 @@ export default function LoginPageClient() {
 
     setErrors({});
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const res = await register(regUsername.trim(), regEmail.trim(), regPassword);
+      if (res.success) {
+        setSuccessMsg(res.message || 'Akun berhasil dibuat! Mengalihkan...');
+        setTimeout(() => {
+          router.push('/profile');
+        }, 500);
+      } else {
+        setErrors({ general: res.message || 'Gagal mendaftar akun' });
+      }
+    } catch (err: any) {
+      setErrors({ general: err.message || 'Terjadi kesalahan jaringan' });
+    } finally {
       setLoading(false);
-      login({
-        username: regUsername.trim(),
-        email: regEmail.trim(),
-        createdAt: new Date().toISOString(),
-      });
-
-      setSuccessMsg(`Akun berhasil dibuat!`);
-      setTimeout(() => {
-        router.push('/');
-      }, 600);
-    }, 400);
+    }
   };
 
   const handleForgotSubmit = (e: React.FormEvent) => {
@@ -237,6 +234,14 @@ export default function LoginPageClient() {
             <div className="mb-4 p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-2">
               <CheckCircle2 size={15} className="text-emerald-400 flex-shrink-0" />
               <span>{successMsg}</span>
+            </div>
+          )}
+
+          {/* General Error Banner */}
+          {errors.general && (
+            <div className="mb-4 p-2.5 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center gap-2">
+              <AlertCircle size={15} className="text-rose-400 flex-shrink-0" />
+              <span>{errors.general}</span>
             </div>
           )}
 

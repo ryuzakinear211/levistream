@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bookmark, Film } from 'lucide-react';
 import TrailerModal from '@/components/TrailerModal';
 import ShareButton from '@/components/ShareButton';
@@ -22,14 +22,26 @@ export default function MovieDetailClient({
   trailerKey,
 }: MovieDetailClientProps) {
   const [showTrailer, setShowTrailer] = useState(false);
-  const { toggleWatchlist, isInWatchlist } = useAuth();
+  const { toggleWatchlist, isInWatchlist, addToHistory } = useAuth();
 
   const itemId = movieId || movieTitle;
   const isSaved = isInWatchlist(itemId);
 
+  // Automatically record view to user history if logged in
+  useEffect(() => {
+    if (itemId) {
+      addToHistory({
+        contentId: itemId,
+        title: movieTitle,
+        posterPath: posterPath || null,
+        type: 'movie',
+      });
+    }
+  }, [itemId, movieTitle, posterPath, addToHistory]);
+
   const handleWatchlistClick = () => {
     toggleWatchlist({
-      id: itemId,
+      contentId: itemId,
       title: movieTitle,
       posterPath: posterPath || null,
       type: 'movie',

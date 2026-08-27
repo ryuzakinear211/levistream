@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Film, Home, Tv, Search, ChevronDown, ChevronRight,
-  TrendingUp, Star, Clock, Clapperboard, Flame, Menu, X, LogIn
+  TrendingUp, Star, Clock, Clapperboard, Flame, Menu, X, LogIn, User
 } from 'lucide-react';
 import { Genre } from '@/types/tmdb';
 import { useAuth } from '@/context/AuthContext';
@@ -32,6 +32,7 @@ export default function Sidebar({ genres = [], isOpen, onToggle }: SidebarProps)
     { href: '/movie', icon: Film, label: 'Movies' },
     { href: '/tv', icon: Tv, label: 'TV Shows' },
     { href: '/search', icon: Search, label: 'Search' },
+    { href: '/profile', icon: User, label: 'Profile' },
   ];
 
   const movieNav = [

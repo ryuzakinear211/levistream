@@ -3,11 +3,18 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Film, Tv, Search, Grid3X3, X, ChevronRight } from 'lucide-react';
+import { Home, Film, Tv, Search, Grid3X3, X, ChevronRight, User } from 'lucide-react';
 import { Genre } from '@/types/tmdb';
 
 interface BottomNavProps {
   genres?: Genre[];
+}
+
+interface NavItem {
+  href?: string;
+  icon: any;
+  label: string;
+  action?: () => void;
 }
 
 export default function BottomNav({ genres = [] }: BottomNavProps) {
@@ -19,12 +26,12 @@ export default function BottomNav({ genres = [] }: BottomNavProps) {
     return pathname.startsWith(href);
   };
 
-  const navItems = [
+  const navItems: NavItem[] = [
     { href: '/', icon: Home, label: 'Home' },
     { href: '/movie', icon: Film, label: 'Movies' },
     { href: '/tv', icon: Tv, label: 'TV Shows' },
     { href: '/search', icon: Search, label: 'Search' },
-    { icon: Grid3X3, label: 'Genres', action: () => setGenreSheetOpen(true) },
+    { href: '/profile', icon: User, label: 'Profile' },
   ];
 
   return (

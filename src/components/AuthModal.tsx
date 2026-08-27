@@ -24,6 +24,7 @@ export default function AuthModal() {
     authModalMessage,
     closeAuthModal,
     login,
+    register,
   } = useAuth();
 
   const [tab, setTab] = useState<'login' | 'register'>('login');
@@ -83,7 +84,7 @@ export default function AuthModal() {
 
   if (!isAuthModalOpen) return null;
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
 
@@ -101,21 +102,19 @@ export default function AuthModal() {
 
     setErrors({});
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const res = await login(loginIdentifier.trim(), loginPassword);
+      if (!res.success) {
+        setErrors({ general: res.message || 'Username/Email atau Password salah' });
+      }
+    } catch (err: any) {
+      setErrors({ general: err.message || 'Terjadi kesalahan jaringan' });
+    } finally {
       setLoading(false);
-      login({
-        username: loginIdentifier.includes('@')
-          ? loginIdentifier.split('@')[0]
-          : loginIdentifier,
-        email: loginIdentifier.includes('@')
-          ? loginIdentifier
-          : `${loginIdentifier}@gmail.com`,
-        createdAt: new Date().toISOString(),
-      });
-    }, 400);
+    }
   };
 
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
 
@@ -150,14 +149,16 @@ export default function AuthModal() {
 
     setErrors({});
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const res = await register(regUsername.trim(), regEmail.trim(), regPassword);
+      if (!res.success) {
+        setErrors({ general: res.message || 'Gagal mendaftar akun' });
+      }
+    } catch (err: any) {
+      setErrors({ general: err.message || 'Terjadi kesalahan jaringan' });
+    } finally {
       setLoading(false);
-      login({
-        username: regUsername.trim(),
-        email: regEmail.trim(),
-        createdAt: new Date().toISOString(),
-      });
-    }, 400);
+    }
   };
 
   const handleForgotSubmit = (e: React.FormEvent) => {
@@ -208,12 +209,24 @@ export default function AuthModal() {
         </button>
 
         {/* ── Watchlist / Login Alert Notice (Only when needed) ── */}
-        <div className="mb-4 pr-8">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-cyan-500/10 border border-cyan-500/25 text-cyan-300 text-xs font-semibold">
-            <Bookmark size={14} className="text-cyan-400 flex-shrink-0" />
-            <span>{authModalMessage || 'Silakan login untuk menyimpan ke Watchlist'}</span>
+        {authModalMessage && (
+          <div className="mb-4 pr-8">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-cyan-500/10 border border-cyan-500/25 text-cyan-300 text-xs font-semibold">
+              <Bookmark size={14} className="text-cyan-400 flex-shrink-0" />
+              <span>{authModalMessage}</span>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* ── General Error Banner ── */}
+        {errors.general && (
+          <div className="mb-4 pr-8">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-semibold">
+              <AlertCircle size={14} className="text-rose-400 flex-shrink-0" />
+              <span>{errors.general}</span>
+            </div>
+          </div>
+        )}
 
         {/* ── FORGOT PASSWORD VIEW ── */}
         {forgotPasswordView ? (

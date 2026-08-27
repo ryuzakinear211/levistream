@@ -46,7 +46,7 @@ export function TVDetailHeaderActions({
 
   const handleWatchlistClick = () => {
     toggleWatchlist({
-      id: itemId,
+      contentId: itemId,
       title: showTitle,
       posterPath: posterPath || null,
       type: 'tv',
@@ -117,6 +117,7 @@ export default function TVDetailClient({
   initialActiveEpisode,
   defaultBackdrop,
 }: TVDetailPlayerSectionProps) {
+  const { addToHistory } = useAuth();
   const [activeEpisode, setActiveEpisode] = useState<CustomEpisode | null>(initialActiveEpisode);
 
   const initialSeasonIndex = seasons.findIndex((s) =>
@@ -130,6 +131,22 @@ export default function TVDetailClient({
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Automatically record view to user history if logged in
+  useEffect(() => {
+    if (showTitle) {
+      const epLabel = activeEpisode?.episodeLabel
+        ? `${activeEpisode.episodeLabel} - ${activeEpisode.title || 'Episode'}`
+        : activeEpisode?.title;
+      addToHistory({
+        contentId: showTitle,
+        title: showTitle,
+        episodeTitle: epLabel,
+        posterPath: defaultBackdrop || null,
+        type: 'tv',
+      });
+    }
+  }, [showTitle, activeEpisode?.slug, defaultBackdrop, addToHistory]);
 
   const allEpisodes = React.useMemo(() => {
     return seasons.flatMap((s) => s.episodes);
