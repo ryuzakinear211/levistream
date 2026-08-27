@@ -19,7 +19,8 @@ export const metadata: Metadata = {
   description: `Discover trending and popular TV shows on ${siteConfig.name}.`,
 };
 
-export const revalidate = 3600;
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default async function TVPage() {
   const [
