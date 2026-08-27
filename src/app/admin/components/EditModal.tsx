@@ -11,6 +11,7 @@ import {
   Plus,
   Play,
   Trash2,
+  AlertCircle,
 } from 'lucide-react';
 import { EditingItemState, TMDBPreviewData, TVShowItem } from '../types';
 import { BackdropPicker } from './BackdropPicker';
@@ -54,6 +55,7 @@ export const EditModal: React.FC<EditModalProps> = ({
   const [showBackdropPicker, setShowBackdropPicker] = useState(false);
   const [activeEpBackdropId, setActiveEpBackdropId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Editable episodes state when editing a TV Show
   const [episodesList, setEpisodesList] = useState<EditableEpisode[]>([]);
@@ -68,6 +70,7 @@ export const EditModal: React.FC<EditModalProps> = ({
   // Initialize editable episodes from current show
   useEffect(() => {
     if (editingItem && isOpen) {
+      setSubmitError(null);
       if (editingItem.type === 'tv_show' && currentShow) {
         const mapped: EditableEpisode[] = (currentShow.episodes || []).map((ep, idx) => ({
           id: ep.relativePath || `ep_${idx}_${Date.now()}`,
@@ -124,13 +127,17 @@ export const EditModal: React.FC<EditModalProps> = ({
     if (editingItem.type === 'movie' || editingItem.type === 'tv_episode') {
       const vid = editingItem.frontmatter.videourl || editingItem.frontmatter.video_url;
       if (vid && !isValidVideoUrl(vid)) {
-        showToast('Format URL Video tidak valid (contoh: https://domain.com/video.mp4 atau https://embed.provider.com/...)', 'error');
+        const msg = 'Format URL Video tidak valid (contoh: https://domain.com/video.mp4 atau https://embed.provider.com/...)';
+        setSubmitError(msg);
+        showToast(msg, 'error');
         return;
       }
     } else if (editingItem.type === 'tv_show') {
       for (const ep of episodesList) {
         if (ep.videourl && !isValidVideoUrl(ep.videourl)) {
-          showToast(`URL Video untuk ${ep.title || ep.slug} tidak valid.`, 'error');
+          const msg = `URL Video untuk ${ep.title || ep.slug} tidak valid.`;
+          setSubmitError(msg);
+          showToast(msg, 'error');
           return;
         }
       }
@@ -138,6 +145,7 @@ export const EditModal: React.FC<EditModalProps> = ({
 
     setSubmitting(true);
     try {
+      setSubmitError(null);
       const payload: any = {
         relativePath: editingItem.relativePath,
         frontmatter: editingItem.frontmatter,
@@ -151,7 +159,9 @@ export const EditModal: React.FC<EditModalProps> = ({
       await onSubmit(payload);
       onClose();
     } catch (err: any) {
-      showToast(err.message || 'Gagal menyimpan perubahan', 'error');
+      const msg = err.message || 'Gagal menyimpan perubahan';
+      setSubmitError(msg);
+      showToast(msg, 'error');
     } finally {
       setSubmitting(false);
     }
@@ -338,6 +348,23 @@ export const EditModal: React.FC<EditModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-3.5 sm:p-5 overflow-y-auto space-y-4 flex-1">
+          {/* Top Error Alert Banner */}
+          {submitError && (
+            <div className="p-3.5 rounded-xl bg-red-950/95 border border-red-500/60 text-red-200 text-xs font-semibold flex items-center justify-between gap-3 shadow-xl animate-shake">
+              <div className="flex items-center gap-2.5">
+                <AlertCircle size={18} className="text-red-400 flex-shrink-0" />
+                <span>{submitError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSubmitError(null)}
+                className="text-red-400 hover:text-white p-1 rounded-lg hover:bg-white/10"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
           {activeTab === 'info' ? (
             <>
               {/* TMDB ID & Autofill */}

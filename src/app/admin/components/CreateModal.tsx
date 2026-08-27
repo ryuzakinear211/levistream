@@ -13,6 +13,7 @@ import {
   ImageIcon,
   Check,
   Trash2,
+  AlertCircle,
 } from 'lucide-react';
 import { DraftSeason, TMDBPreviewData, MovieItem, TVShowItem } from '../types';
 import { BackdropPicker } from './BackdropPicker';
@@ -94,10 +95,12 @@ export const CreateModal: React.FC<CreateModalProps> = ({
   const [batchSeasonId, setBatchSeasonId] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Reset states when modal opens
   useEffect(() => {
     if (isOpen) {
+      setSubmitError(null);
       setFormTmdbId('');
       setFormTitle('');
       setFormSlug('');
@@ -245,8 +248,9 @@ export const CreateModal: React.FC<CreateModalProps> = ({
 
     setSubmitting(true);
     try {
+      setSubmitError(null);
       const payload: any = {
-        contentType,
+        type: contentType,
         tmdb_id: formTmdbId,
         title: formTitle,
         slug: formSlug,
@@ -266,7 +270,9 @@ export const CreateModal: React.FC<CreateModalProps> = ({
       await onSubmit(payload);
       onClose();
     } catch (err: any) {
-      showToast(err.message || 'Gagal membuat konten', 'error');
+      const msg = err.message || 'Gagal membuat konten';
+      setSubmitError(msg);
+      showToast(msg, 'error');
     } finally {
       setSubmitting(false);
     }
@@ -370,6 +376,23 @@ export const CreateModal: React.FC<CreateModalProps> = ({
 
         {/* Modal Form Content */}
         <form onSubmit={handleSubmit} className="p-3.5 sm:p-5 overflow-y-auto space-y-4 flex-1">
+          {/* Top Error Alert Banner */}
+          {submitError && (
+            <div className="p-3.5 rounded-xl bg-red-950/95 border border-red-500/60 text-red-200 text-xs font-semibold flex items-center justify-between gap-3 shadow-xl animate-shake">
+              <div className="flex items-center gap-2.5">
+                <AlertCircle size={18} className="text-red-400 flex-shrink-0" />
+                <span>{submitError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSubmitError(null)}
+                className="text-red-400 hover:text-white p-1 rounded-lg hover:bg-white/10"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
           {/* Live TMDB Search Bar (For Movies and TV Series) */}
           {contentType !== 'tv_episode' && (
             <div className="p-3 sm:p-4 rounded-xl bg-[#080d1e] border border-cyan-500/25 space-y-3">

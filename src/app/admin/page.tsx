@@ -17,7 +17,7 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-[#050816] text-white p-3 sm:p-6 lg:p-8 space-y-6">
       {/* Toast Notifications */}
-      <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+      <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-2 max-w-sm w-full pointer-events-none">
         {admin.toasts.map((toast) => (
           <div
             key={toast.id}

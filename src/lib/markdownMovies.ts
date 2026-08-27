@@ -581,11 +581,11 @@ export async function getAllFeaturedCustomMovies(): Promise<FeaturedItem[]> {
         const featured = (mongoMovies || []).filter((m) => Boolean(m.featured));
         return await Promise.all(
           featured.map(async (m) => {
-            let overview = (m.deskripsi || (m as any).description || (m as any).overview || '').trim();
+            let overview = (m.deskripsi || (m as any).description || '').trim();
             let rating = m.rating || 0;
             let genres: string[] = [];
-            let posterUrl = '/placeholder-poster.svg';
-            let backdropUrl = '/placeholder-poster.svg';
+            let posterUrl = m.image_url ? getImageUrl(m.image_url, 'w500') : '/placeholder-poster.svg';
+            let backdropUrl = m.image_url ? getImageUrl(m.image_url, 'w1280') : '/placeholder-poster.svg';
 
             if (m.tmdb_id) {
               try {
@@ -597,18 +597,17 @@ export async function getAllFeaturedCustomMovies(): Promise<FeaturedItem[]> {
                   600_000
                 );
                 if (tmdb) {
-                  if (tmdb.poster_path) posterUrl = getImageUrl(tmdb.poster_path, 'w500');
-                  if (tmdb.backdrop_path) backdropUrl = getImageUrl(tmdb.backdrop_path, 'w1280');
+                  if (posterUrl === '/placeholder-poster.svg' && tmdb.poster_path) {
+                    posterUrl = getImageUrl(tmdb.poster_path, 'w500');
+                  }
+                  if (backdropUrl === '/placeholder-poster.svg' && tmdb.backdrop_path) {
+                    backdropUrl = getImageUrl(tmdb.backdrop_path, 'w1280');
+                  }
                   if (!overview && tmdb.overview) overview = tmdb.overview;
                   if (!rating && tmdb.vote_average) rating = Math.round(tmdb.vote_average * 10) / 10;
                   if (tmdb.genres) genres = tmdb.genres.map((g) => g.name);
                 }
               } catch {}
-            }
-
-            if (posterUrl === '/placeholder-poster.svg' && m.image_url) {
-              posterUrl = getImageUrl(m.image_url, 'w500');
-              backdropUrl = getImageUrl(m.image_url, 'w1280');
             }
 
             return {
