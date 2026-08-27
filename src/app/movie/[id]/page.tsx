@@ -16,8 +16,7 @@ import MovieDetailClient from '@/components/MovieDetailClient';
 import VideoPlayer from '@/components/VideoPlayer';
 import siteConfig from '@/config';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export const revalidate = 60;
 
 interface PageProps {
   params: {
@@ -531,4 +530,9 @@ export default async function MovieDetailPage({ params }: PageProps) {
       )}
     </div>
   );
+}
+
+export async function generateStaticParams() {
+  const slugs = getAllCustomMovieSlugs();
+  return slugs.map((id) => ({ id }));
 }

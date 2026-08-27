@@ -15,8 +15,7 @@ import { getAllCustomMoviesForList } from '@/lib/markdownMovies';
 import { getAllCustomTVShowsForList } from '@/lib/markdownTV';
 import siteConfig from '@/config';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export const revalidate = 60;
 
 export default async function HomePage() {
   const [

@@ -16,8 +16,7 @@ import TVDetailClient, { TVDetailHeaderActions } from '@/components/TVDetailClie
 import TVEpisodeList from '@/components/TVEpisodeList';
 import siteConfig from '@/config';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export const revalidate = 60;
 
 interface PageProps {
   params: {
@@ -518,4 +517,8 @@ export default async function TVShowPage({ params }: PageProps) {
       )}
     </div>
   );
+}
+
+export async function generateStaticParams() {
+  return await getAllCustomTVSlugPaths();
 }
