@@ -273,9 +273,74 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Pro
   ]);
 }
 
-// ──────────────────────────────────────────
-// MOVIE CRUD OPERATIONS (CACHED WITH SWR)
-// ──────────────────────────────────────────
+export interface PaginatedResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface MongoPaginationOptions {
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+
+export async function getPaginatedMongoMovies(
+  options: MongoPaginationOptions = {}
+): Promise<PaginatedResult<MongoMovie>> {
+  ensureInitialized();
+  const page = Math.max(1, Number(options.page) || 1);
+  const limit = Math.max(1, Number(options.limit) || 7);
+  const search = (options.search || '').trim();
+  const skip = (page - 1) * limit;
+
+  const cacheKey = `mongo_paged_movies_${page}_${limit}_${search.toLowerCase()}`;
+
+  return memoryCache.getOrFetch<PaginatedResult<MongoMovie>>(
+    cacheKey,
+    async () => {
+      return withTimeout(
+        (async () => {
+          try {
+            const { movies } = await getCollectionsRaw();
+            const filter: any = {};
+            if (search) {
+              const num = Number(search);
+              const regex = { $regex: search, $options: 'i' };
+              filter.$or = [
+                { title: regex },
+                { slug: regex },
+                ...(!isNaN(num) ? [{ tmdb_id: num }] : []),
+              ];
+            }
+
+            const [total, items] = await Promise.all([
+              movies.countDocuments(filter),
+              movies
+                .find(filter)
+                .sort({ updatedAt: -1, createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .toArray(),
+            ]);
+
+            const totalPages = Math.ceil(total / limit) || 1;
+            return { items, total, page, limit, totalPages };
+          } catch (err) {
+            console.warn('[MongoDB] getPaginatedMongoMovies error:', err);
+            return { items: [], total: 0, page, limit, totalPages: 1 };
+          }
+        })(),
+        3500,
+        { items: [], total: 0, page, limit, totalPages: 1 }
+      );
+    },
+    60_000,
+    10_000
+  );
+}
 
 export async function getMongoMovies(): Promise<MongoMovie[]> {
   ensureInitialized();
@@ -388,9 +453,106 @@ export async function deleteMongoMovie(slug: string): Promise<boolean> {
   return res.deletedCount > 0;
 }
 
-// ──────────────────────────────────────────
-// TV SHOW & EPISODE CRUD OPERATIONS (CACHED WITH SWR)
-// ──────────────────────────────────────────
+export async function getPaginatedMongoTVShows(
+  options: MongoPaginationOptions = {}
+): Promise<PaginatedResult<MongoTVShow & { episodes: MongoTVEpisode[] }>> {
+  ensureInitialized();
+  const page = Math.max(1, Number(options.page) || 1);
+  const limit = Math.max(1, Number(options.limit) || 7);
+  const search = (options.search || '').trim();
+  const skip = (page - 1) * limit;
+
+  const cacheKey = `mongo_paged_tv_${page}_${limit}_${search.toLowerCase()}`;
+
+  return memoryCache.getOrFetch<PaginatedResult<MongoTVShow & { episodes: MongoTVEpisode[] }>>(
+    cacheKey,
+    async () => {
+      return withTimeout(
+        (async () => {
+          try {
+            const { tvShows, episodes } = await getCollectionsRaw();
+            const filter: any = {};
+            if (search) {
+              const num = Number(search);
+              const regex = { $regex: search, $options: 'i' };
+              filter.$or = [
+                { title: regex },
+                { showSlug: regex },
+                ...(!isNaN(num) ? [{ tmdb_id: num }] : []),
+              ];
+            }
+
+            const [total, shows] = await Promise.all([
+              tvShows.countDocuments(filter),
+              tvShows
+                .find(filter)
+                .sort({ updatedAt: -1, createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .toArray(),
+            ]);
+
+            const showSlugs = shows.map((s) => s.showSlug);
+            const eps =
+              showSlugs.length > 0
+                ? await episodes
+                    .find({ showSlug: { $in: showSlugs }, deleted: { $ne: true } })
+                    .toArray()
+                : [];
+
+            const items = shows.map((s) => ({
+              ...s,
+              episodes: eps.filter((ep) => ep.showSlug === s.showSlug),
+            }));
+
+            const totalPages = Math.ceil(total / limit) || 1;
+            return { items, total, page, limit, totalPages };
+          } catch (err) {
+            console.warn('[MongoDB] getPaginatedMongoTVShows error:', err);
+            return { items: [], total: 0, page, limit, totalPages: 1 };
+          }
+        })(),
+        3500,
+        { items: [], total: 0, page, limit, totalPages: 1 }
+      );
+    },
+    60_000,
+    10_000
+  );
+}
+
+export async function getMongoContentCounts(): Promise<{
+  totalMovies: number;
+  totalTVShows: number;
+  totalEpisodes: number;
+}> {
+  ensureInitialized();
+  return memoryCache.getOrFetch(
+    'mongo_content_overview_counts',
+    async () => {
+      return withTimeout(
+        (async () => {
+          try {
+            const { movies, tvShows, episodes } = await getCollectionsRaw();
+            const [totalMovies, totalTVShows, totalEpisodes] = await Promise.all([
+              movies.countDocuments(),
+              tvShows.countDocuments(),
+              episodes.countDocuments({ deleted: { $ne: true } }),
+            ]);
+            return { totalMovies, totalTVShows, totalEpisodes };
+          } catch (err) {
+            console.warn('[MongoDB] getMongoContentCounts error:', err);
+            return { totalMovies: 0, totalTVShows: 0, totalEpisodes: 0 };
+          }
+        })(),
+        3500,
+        { totalMovies: 0, totalTVShows: 0, totalEpisodes: 0 }
+      );
+    },
+    60_000,
+    10_000
+  );
+}
 
 export async function getMongoTVShows(): Promise<(MongoTVShow & { episodes: MongoTVEpisode[] })[]> {
   ensureInitialized();

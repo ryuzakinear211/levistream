@@ -435,28 +435,60 @@ export const TVListView: React.FC<TVListViewProps> = ({
         })}
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between pt-4 border-t border-white/10">
+      {/* Pagination controls (active if totalShowsCount > 7 or totalPages > 1) */}
+      {(totalPages > 1 || totalShowsCount > 7) && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-white/10">
           <span className="text-xs text-slate-400">
-            Halaman {currentPage} dari {totalPages} ({totalShowsCount} total series)
+            Menampilkan{' '}
+            <span className="font-bold text-white">
+              {totalShowsCount > 0 ? (currentPage - 1) * 7 + 1 : 0}
+            </span>
+            -
+            <span className="font-bold text-white">
+              {Math.min(currentPage * 7, totalShowsCount)}
+            </span>{' '}
+            dari <span className="font-bold text-pink-400">{totalShowsCount}</span> series (Halaman {currentPage} dari {totalPages})
           </span>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 self-center sm:self-auto flex-wrap">
             <button
               disabled={currentPage <= 1}
               onClick={() => onPageChange(currentPage - 1)}
-              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-all"
+              className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-all text-xs font-semibold flex items-center gap-1"
             >
-              <ChevronLeft size={16} />
+              <ChevronLeft size={15} />
+              <span className="hidden xs:inline">Prev</span>
             </button>
-            <span className="px-3 py-1 text-xs font-bold text-white bg-pink-500/20 rounded-lg border border-pink-500/30">
-              {currentPage}
-            </span>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+              .map((p, idx, arr) => {
+                const prevP = arr[idx - 1];
+                const showEllipsis = prevP && p - prevP > 1;
+
+                return (
+                  <React.Fragment key={p}>
+                    {showEllipsis && <span className="px-1 text-slate-500 text-xs">...</span>}
+                    <button
+                      onClick={() => onPageChange(p)}
+                      className={`min-w-[32px] h-8 px-2 rounded-lg text-xs font-bold transition-all ${
+                        p === currentPage
+                          ? 'bg-pink-500 text-white shadow-md shadow-pink-500/20'
+                          : 'bg-white/5 hover:bg-white/10 text-slate-300'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  </React.Fragment>
+                );
+              })}
+
             <button
               disabled={currentPage >= totalPages}
               onClick={() => onPageChange(currentPage + 1)}
-              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-all"
+              className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-all text-xs font-semibold flex items-center gap-1"
             >
-              <ChevronRight size={16} />
+              <span className="hidden xs:inline">Next</span>
+              <ChevronRight size={15} />
             </button>
           </div>
         </div>

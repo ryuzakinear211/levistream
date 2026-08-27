@@ -43,8 +43,8 @@ export default function AdminPage() {
         setActiveTab={admin.setActiveTab}
         searchQuery={admin.searchQuery}
         setSearchQuery={admin.setSearchQuery}
-        moviesCount={admin.movies.length}
-        tvShowsCount={admin.tvShows.length}
+        moviesCount={admin.totalAllMoviesCount}
+        tvShowsCount={admin.totalAllTvShowsCount}
         totalEpisodesCount={admin.totalEpisodesCount}
         loading={admin.loading}
         onRefresh={() => admin.fetchContent()}
@@ -80,7 +80,7 @@ export default function AdminPage() {
       ) : admin.activeTab === 'movies' ? (
         <MovieListView
           movies={admin.paginatedMovies}
-          totalMoviesCount={admin.filteredMovies.length}
+          totalMoviesCount={admin.totalMovies}
           searchQuery={admin.searchQuery}
           currentPage={admin.moviePage}
           totalPages={admin.totalMoviePages}
@@ -107,7 +107,7 @@ export default function AdminPage() {
       ) : (
         <TVListView
           tvShows={admin.paginatedTvShows}
-          totalShowsCount={admin.filteredTvShows.length}
+          totalShowsCount={admin.totalTvShows}
           searchQuery={admin.searchQuery}
           currentPage={admin.tvPage}
           totalPages={admin.totalTvPages}

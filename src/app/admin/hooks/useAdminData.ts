@@ -13,6 +13,7 @@ export function useAdminData() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'movies' | 'tv'>('movies');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -25,10 +26,17 @@ export function useAdminData() {
   // Batch selection
   const [selectedBatchPaths, setSelectedBatchPaths] = useState<string[]>([]);
 
-  // Pagination
+  // Server-side Pagination (7 items per page)
+  const ITEMS_PER_PAGE = 7;
   const [moviePage, setMoviePage] = useState(1);
   const [tvPage, setTvPage] = useState(1);
-  const ITEMS_PER_PAGE = 12;
+  const [totalMovies, setTotalMovies] = useState(0);
+  const [totalTvShows, setTotalTvShows] = useState(0);
+  const [totalMoviePages, setTotalMoviePages] = useState(1);
+  const [totalTvPages, setTotalTvPages] = useState(1);
+  const [totalAllMoviesCount, setTotalAllMoviesCount] = useState(0);
+  const [totalAllTvShowsCount, setTotalAllTvShowsCount] = useState(0);
+  const [totalEpisodesCount, setTotalEpisodesCount] = useState(0);
 
   // GitHub Settings
   const [ghToken, setGhToken] = useState('');
@@ -46,6 +54,16 @@ export function useAdminData() {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4000);
   }, []);
+
+  // Debounce search query changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim());
+      setMoviePage(1);
+      setTvPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Load GitHub credentials from localStorage
   useEffect(() => {
@@ -85,19 +103,38 @@ export function useAdminData() {
     return h;
   }, [ghToken, ghOwner, ghRepo, ghBranch]);
 
-  // Fetch all admin content
+  // Fetch paginated admin content
   const fetchContent = useCallback(
-    async (options: { silent?: boolean } = {}) => {
+    async (options: { silent?: boolean; customMoviePage?: number; customTvPage?: number } = {}) => {
       if (!options.silent) setLoading(true);
+      const mPage = options.customMoviePage !== undefined ? options.customMoviePage : moviePage;
+      const tPage = options.customTvPage !== undefined ? options.customTvPage : tvPage;
+
       try {
-        const res = await fetch('/api/admin/content', {
+        const queryParams = new URLSearchParams({
+          tab: activeTab,
+          moviePage: String(mPage),
+          tvPage: String(tPage),
+          search: debouncedSearch,
+          limit: String(ITEMS_PER_PAGE),
+        });
+
+        const res = await fetch(`/api/admin/content?${queryParams.toString()}`, {
           headers: getHeaders(),
           cache: 'no-store',
         });
+
         if (res.ok) {
           const data = await res.json();
           setMovies(data.movies || []);
           setTvShows(data.tvShows || []);
+          setTotalMovies(data.totalMovies || 0);
+          setTotalTvShows(data.totalTvShows || 0);
+          setTotalMoviePages(data.totalMoviePages || 1);
+          setTotalTvPages(data.totalTvPages || 1);
+          setTotalAllMoviesCount(data.totalAllMoviesCount !== undefined ? data.totalAllMoviesCount : (data.totalMovies || 0));
+          setTotalAllTvShowsCount(data.totalAllTvShowsCount !== undefined ? data.totalAllTvShowsCount : (data.totalTvShows || 0));
+          setTotalEpisodesCount(data.totalEpisodesCount || 0);
         } else {
           showToast('Gagal memuat konten admin', 'error');
         }
@@ -107,51 +144,18 @@ export function useAdminData() {
         setLoading(false);
       }
     },
-    [getHeaders, showToast]
+    [getHeaders, activeTab, moviePage, tvPage, debouncedSearch, showToast]
   );
 
   useEffect(() => {
     fetchContent();
   }, [fetchContent]);
 
-  // Filtered lists
-  const filteredMovies = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return movies;
-    return movies.filter((m) => {
-      const title = (m.displayTitle || m.frontmatter.title || m.slug).toLowerCase();
-      const tmdbId = String(m.frontmatter.tmdb_id || '');
-      return title.includes(q) || tmdbId.includes(q) || m.slug.includes(q);
-    });
-  }, [movies, searchQuery]);
-
-  const filteredTvShows = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return tvShows;
-    return tvShows.filter((s) => {
-      const title = (s.displayTitle || s.frontmatter.title || s.showSlug).toLowerCase();
-      const tmdbId = String(s.frontmatter.tmdb_id || '');
-      return title.includes(q) || tmdbId.includes(q) || s.showSlug.includes(q);
-    });
-  }, [tvShows, searchQuery]);
-
-  // Paged lists
-  const totalMoviePages = Math.ceil(filteredMovies.length / ITEMS_PER_PAGE) || 1;
-  const paginatedMovies = useMemo(() => {
-    const start = (moviePage - 1) * ITEMS_PER_PAGE;
-    return filteredMovies.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredMovies, moviePage]);
-
-  const totalTvPages = Math.ceil(filteredTvShows.length / ITEMS_PER_PAGE) || 1;
-  const paginatedTvShows = useMemo(() => {
-    const start = (tvPage - 1) * ITEMS_PER_PAGE;
-    return filteredTvShows.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredTvShows, tvPage]);
-
-  // Total Episode count across all shows
-  const totalEpisodesCount = useMemo(() => {
-    return tvShows.reduce((acc, s) => acc + (s.episodes?.length || 0), 0);
-  }, [tvShows]);
+  // For backward compatibility and simplicity in components
+  const paginatedMovies = movies;
+  const paginatedTvShows = tvShows;
+  const filteredMovies = movies;
+  const filteredTvShows = tvShows;
 
   // CRUD Handlers
   const handleCreateSubmit = async (payload: any) => {
@@ -169,7 +173,9 @@ export function useAdminData() {
     }
 
     showToast('Konten berhasil dibuat & live!');
-    fetchContent({ silent: true });
+    setMoviePage(1);
+    setTvPage(1);
+    fetchContent({ silent: true, customMoviePage: 1, customTvPage: 1 });
   };
 
   const handleEditSubmit = async (item: any) => {
@@ -270,6 +276,10 @@ export function useAdminData() {
     filteredTvShows,
     paginatedMovies,
     paginatedTvShows,
+    totalMovies,
+    totalTvShows,
+    totalAllMoviesCount,
+    totalAllTvShowsCount,
     moviePage,
     setMoviePage,
     totalMoviePages,

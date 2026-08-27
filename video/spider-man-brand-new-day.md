@@ -1,6 +1,7 @@
 ---
 tmdb_id: 969681
-videourl: 'https://wge=idemoviedb.org/movie/1084244-toy-story-5?language=id'
+videourl: >-
+  https://huggingface.co/buckets/nexus33rd/cloud/resolve/BLEACH.Thousand.Year.Blood.War.S01E45.1080p.NF.WEB-DL.AAC2.0.H.264-VARYG.mkv
 title: 'Spider-Man: Brand New Day'
 deskripsi: >-
   Empat tahun setelah peristiwa Spider-Man: No Way Home, Peter Parker sudah
@@ -13,6 +14,6 @@ deskripsi: >-
   lalunya!
 image_url: 'https://image.tmdb.org/t/p/w500/bjiS5ipwxb9JFy3XRRN4OAilSeX.jpg'
 rating: 0
-featured: true
+featured: false
 ---
 

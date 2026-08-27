@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getGitHubConfigFromRequest,
-  fetchAllAdminContent,
+  fetchPaginatedAdminContent,
   createAdminContent,
   updateAdminContent,
   deleteAdminContent,
@@ -13,7 +13,21 @@ export const revalidate = 0;
 export async function GET(request: NextRequest) {
   try {
     const ghConfig = getGitHubConfigFromRequest(request);
-    const data = await fetchAllAdminContent(ghConfig);
+    const { searchParams } = new URL(request.url);
+
+    const tab = (searchParams.get('tab') as 'movies' | 'tv') || 'movies';
+    const moviePage = Math.max(1, parseInt(searchParams.get('moviePage') || searchParams.get('page') || '1', 10));
+    const tvPage = Math.max(1, parseInt(searchParams.get('tvPage') || searchParams.get('page') || '1', 10));
+    const search = searchParams.get('search') || '';
+    const limit = Math.max(1, parseInt(searchParams.get('limit') || '7', 10));
+
+    const data = await fetchPaginatedAdminContent(ghConfig, {
+      tab,
+      moviePage,
+      tvPage,
+      search,
+      limit,
+    });
     return NextResponse.json(data);
   } catch (error: any) {
     console.error('[API Content GET] Error:', error);
