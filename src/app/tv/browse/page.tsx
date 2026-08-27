@@ -1,7 +1,6 @@
 import React, { Suspense } from 'react';
 import type { Metadata } from 'next';
 import TVBrowseClient from './TVBrowseClient';
-import BrowseGridSkeleton from '@/components/skeletons/BrowseGridSkeleton';
 import siteConfig from '@/config';
 
 export const metadata: Metadata = {
@@ -11,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function TVBrowsePage() {
   return (
-    <Suspense fallback={<BrowseGridSkeleton title="Browse TV Series" />}>
+    <Suspense fallback={<div className="min-h-screen pt-24 px-4" style={{ background: '#050816' }} />}>
       <TVBrowseClient />
     </Suspense>
   );
