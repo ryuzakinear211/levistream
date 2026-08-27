@@ -523,29 +523,46 @@ export async function getMovieDetailsWithCustomOverride(
 export async function getAllFeaturedCustomMovies(): Promise<FeaturedItem[]> {
   try {
     const mongoMovies = await getMongoMovies();
-    return mongoMovies
-      .filter((m) => Boolean(m.featured))
-      .map((m) => {
+    const featured = mongoMovies.filter((m) => Boolean(m.featured));
+    return await Promise.all(
+      featured.map(async (m) => {
         const img = m.image_url || '/placeholder-poster.svg';
+        let overview = (m.deskripsi || (m as any).description || (m as any).overview || '').trim();
+        let rating = m.rating || 0;
+        let genres: string[] = [];
+
+        // If description is empty in custom record but tmdb_id is present, fetch TMDB details to enrich overview
+        if (!overview && m.tmdb_id) {
+          try {
+            const tmdb = await getMovieDetails(Number(m.tmdb_id));
+            if (tmdb) {
+              if (tmdb.overview) overview = tmdb.overview;
+              if (!rating && tmdb.vote_average) rating = Math.round(tmdb.vote_average * 10) / 10;
+              if (tmdb.genres) genres = tmdb.genres.map((g) => g.name);
+            }
+          } catch {}
+        }
+
         return {
           id: `movie-${m.slug}`,
           tmdbId: m.tmdb_id || 0,
           title: m.title || m.slug,
           tagline: undefined,
-          overview: m.deskripsi || '',
+          overview: overview || 'Tonton film ini dengan kualitas terbaik di LeviStream.',
           backdropUrl: img,
           posterUrl: img,
-          rating: m.rating || 0,
+          rating: rating || 8.5,
           year: '2026',
           duration: m.duration || undefined,
           type: 'movie' as const,
-          genres: [],
+          genres,
           link: `/movie/${m.slug}`,
           badge: 'Featured',
           featured: true,
           isCustom: true,
         } as FeaturedItem;
-      });
+      })
+    );
   } catch (err) {
     console.warn('[markdownMovies] getAllFeaturedCustomMovies error:', err);
     return [];

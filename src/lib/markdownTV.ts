@@ -775,10 +775,26 @@ export function getCustomTVTmdbMapping(): Record<string, string> {
 export async function getAllFeaturedCustomTV(): Promise<FeaturedItem[]> {
   try {
     const mongoShows = await getMongoTVShows();
-    return mongoShows
-      .filter((s) => Boolean(s.featured))
-      .map((s) => {
+    const featured = mongoShows.filter((s) => Boolean(s.featured));
+    return await Promise.all(
+      featured.map(async (s) => {
         const img = s.image_url || '/placeholder-poster.svg';
+        let overview = (s.deskripsi || (s as any).description || (s as any).overview || '').trim();
+        let rating = s.rating || 0;
+        let genres: string[] = [];
+
+        // If description is empty in custom record but tmdb_id is present, fetch TMDB details to enrich overview
+        if (!overview && s.tmdb_id) {
+          try {
+            const tmdb = await getTVShowDetails(Number(s.tmdb_id));
+            if (tmdb) {
+              if (tmdb.overview) overview = tmdb.overview;
+              if (!rating && tmdb.vote_average) rating = Math.round(tmdb.vote_average * 10) / 10;
+              if (tmdb.genres) genres = tmdb.genres.map((g) => g.name);
+            }
+          } catch {}
+        }
+
         const firstEp = s.episodes?.[0];
         const epSlug = firstEp ? (firstEp.slug || (firstEp.seasonFolder ? `${firstEp.seasonFolder}/${firstEp.episode}` : firstEp.episode)) : null;
         const link = epSlug ? `/tv/${s.showSlug}/${epSlug}` : `/tv/${s.showSlug}`;
@@ -788,20 +804,21 @@ export async function getAllFeaturedCustomTV(): Promise<FeaturedItem[]> {
           tmdbId: s.tmdb_id || 0,
           title: s.title || s.showSlug,
           tagline: undefined,
-          overview: s.deskripsi || '',
+          overview: overview || 'Saksikan serial seru ini dengan kualitas terbaik di LeviStream.',
           backdropUrl: img,
           posterUrl: img,
-          rating: s.rating || 0,
+          rating: rating || 8.5,
           year: '2026',
           duration: s.episodes?.length ? `${s.episodes.length} Episodes` : undefined,
           type: 'tv' as const,
-          genres: [],
+          genres,
           link,
           badge: 'Featured',
           featured: true,
           isCustom: true,
         } as FeaturedItem;
-      });
+      })
+    );
   } catch (err) {
     console.warn('[markdownTV] getAllFeaturedCustomTV error:', err);
     return [];

@@ -303,14 +303,32 @@ export async function getMongoMovies(): Promise<MongoMovie[]> {
 
 export async function getMongoMovieBySlug(slugOrId: string | number): Promise<MongoMovie | null> {
   const allMovies = await getMongoMovies();
-  const key = String(slugOrId).trim().toLowerCase();
-  const idNum = Number(slugOrId);
+  const rawKey = String(slugOrId).trim().toLowerCase().replace(/\.(md|markdown)$/i, '');
+  const idNum = Number(rawKey);
+  const trailingMatch = rawKey.match(/-(\d{4,})$/);
+  const trailingId = trailingMatch ? Number(trailingMatch[1]) : null;
+  const cleanWithoutYearOrId = rawKey.replace(/-(19\d{2}|20\d{2}|\d{4,})$/, '');
 
-  // Fast In-Memory RAM search (0.01ms)
-  const found = allMovies.find(
-    (m) => m.slug.toLowerCase() === key || (!isNaN(idNum) && m.tmdb_id === idNum)
-  );
-  if (found) return found;
+  // 1. Fast In-Memory RAM multi-pattern search (0.01ms)
+  for (const m of allMovies) {
+    const mSlug = m.slug.toLowerCase();
+    const mTitleSlug = slugify(m.title || '');
+
+    if (mSlug === rawKey || (!isNaN(idNum) && m.tmdb_id === idNum)) {
+      return m;
+    }
+    if (
+      mSlug === cleanWithoutYearOrId ||
+      mTitleSlug === rawKey ||
+      mTitleSlug === cleanWithoutYearOrId ||
+      (m.title && m.title.toLowerCase() === rawKey)
+    ) {
+      return m;
+    }
+    if (trailingId && m.tmdb_id === trailingId) {
+      return m;
+    }
+  }
 
   // Direct database query fallback with 3.5s timeout
   return withTimeout(
@@ -318,8 +336,14 @@ export async function getMongoMovieBySlug(slugOrId: string | number): Promise<Mo
       try {
         const { movies } = await getCollectionsRaw();
         const query = isNaN(idNum)
-          ? { slug: key }
-          : { $or: [{ slug: key }, { tmdb_id: idNum }] };
+          ? {
+              $or: [
+                { slug: rawKey },
+                { slug: cleanWithoutYearOrId },
+                ...(trailingId ? [{ tmdb_id: trailingId }] : []),
+              ],
+            }
+          : { $or: [{ slug: rawKey }, { tmdb_id: idNum }] };
         return await movies.findOne(query as any);
       } catch (err) {
         console.warn('[MongoDB] getMongoMovieBySlug error:', err);
@@ -402,14 +426,32 @@ export async function getMongoTVShowBySlug(
   showSlugOrId: string | number
 ): Promise<(MongoTVShow & { episodes: MongoTVEpisode[] }) | null> {
   const allShows = await getMongoTVShows();
-  const key = String(showSlugOrId).trim().toLowerCase();
-  const idNum = Number(showSlugOrId);
+  const rawKey = String(showSlugOrId).trim().toLowerCase().replace(/\.(md|markdown)$/i, '');
+  const idNum = Number(rawKey);
+  const trailingMatch = rawKey.match(/-(\d{4,})$/);
+  const trailingId = trailingMatch ? Number(trailingMatch[1]) : null;
+  const cleanWithoutYearOrId = rawKey.replace(/-(19\d{2}|20\d{2}|\d{4,})$/, '');
 
-  // Fast In-Memory RAM search (0.01ms)
-  const found = allShows.find(
-    (s) => s.showSlug.toLowerCase() === key || (!isNaN(idNum) && s.tmdb_id === idNum)
-  );
-  if (found) return found;
+  // 1. Fast In-Memory RAM multi-pattern search (0.01ms)
+  for (const s of allShows) {
+    const sSlug = s.showSlug.toLowerCase();
+    const sTitleSlug = slugify(s.title || '');
+
+    if (sSlug === rawKey || (!isNaN(idNum) && s.tmdb_id === idNum)) {
+      return s;
+    }
+    if (
+      sSlug === cleanWithoutYearOrId ||
+      sTitleSlug === rawKey ||
+      sTitleSlug === cleanWithoutYearOrId ||
+      (s.title && s.title.toLowerCase() === rawKey)
+    ) {
+      return s;
+    }
+    if (trailingId && s.tmdb_id === trailingId) {
+      return s;
+    }
+  }
 
   // Direct database query fallback with 3.5s timeout
   return withTimeout(
@@ -417,8 +459,14 @@ export async function getMongoTVShowBySlug(
       try {
         const { tvShows, episodes } = await getCollectionsRaw();
         const query = isNaN(idNum)
-          ? { showSlug: key }
-          : { $or: [{ showSlug: key }, { tmdb_id: idNum }] };
+          ? {
+              $or: [
+                { showSlug: rawKey },
+                { showSlug: cleanWithoutYearOrId },
+                ...(trailingId ? [{ tmdb_id: trailingId }] : []),
+              ],
+            }
+          : { $or: [{ showSlug: rawKey }, { tmdb_id: idNum }] };
         const show = await tvShows.findOne(query as any);
         if (!show) return null;
 
