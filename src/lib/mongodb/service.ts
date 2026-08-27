@@ -259,6 +259,20 @@ function invalidateAllMongoCaches() {
   memoryCache.invalidate('admin_');
 }
 
+async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const timeoutPromise = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+  });
+  return Promise.race([
+    promise.then((res) => {
+      clearTimeout(timer);
+      return res;
+    }),
+    timeoutPromise,
+  ]);
+}
+
 // ──────────────────────────────────────────
 // MOVIE CRUD OPERATIONS (CACHED WITH SWR)
 // ──────────────────────────────────────────
@@ -268,13 +282,19 @@ export async function getMongoMovies(): Promise<MongoMovie[]> {
   return memoryCache.getOrFetch<MongoMovie[]>(
     'mongo_all_movies',
     async () => {
-      try {
-        const { movies } = await getCollectionsRaw();
-        return await movies.find({}).sort({ updatedAt: -1 }).toArray();
-      } catch (err) {
-        console.warn('[MongoDB] getMongoMovies error:', err);
-        return [];
-      }
+      return withTimeout(
+        (async () => {
+          try {
+            const { movies } = await getCollectionsRaw();
+            return await movies.find({}).sort({ updatedAt: -1 }).toArray();
+          } catch (err) {
+            console.warn('[MongoDB] getMongoMovies error:', err);
+            return [];
+          }
+        })(),
+        3500,
+        []
+      );
     },
     300_000, // 5 min TTL
     30_000   // 30s SWR
@@ -292,17 +312,23 @@ export async function getMongoMovieBySlug(slugOrId: string | number): Promise<Mo
   );
   if (found) return found;
 
-  // Direct database query fallback
-  try {
-    const { movies } = await getCollectionsRaw();
-    const query = isNaN(idNum)
-      ? { slug: key }
-      : { $or: [{ slug: key }, { tmdb_id: idNum }] };
-    return await movies.findOne(query as any);
-  } catch (err) {
-    console.warn('[MongoDB] getMongoMovieBySlug error:', err);
-    return null;
-  }
+  // Direct database query fallback with 3.5s timeout
+  return withTimeout(
+    (async () => {
+      try {
+        const { movies } = await getCollectionsRaw();
+        const query = isNaN(idNum)
+          ? { slug: key }
+          : { $or: [{ slug: key }, { tmdb_id: idNum }] };
+        return await movies.findOne(query as any);
+      } catch (err) {
+        console.warn('[MongoDB] getMongoMovieBySlug error:', err);
+        return null;
+      }
+    })(),
+    3500,
+    null
+  );
 }
 
 export async function saveMongoMovie(data: Partial<MongoMovie>): Promise<MongoMovie> {
@@ -347,19 +373,25 @@ export async function getMongoTVShows(): Promise<(MongoTVShow & { episodes: Mong
   return memoryCache.getOrFetch<(MongoTVShow & { episodes: MongoTVEpisode[] })[]>(
     'mongo_all_tv_shows',
     async () => {
-      try {
-        const { tvShows, episodes } = await getCollectionsRaw();
-        const shows = await tvShows.find({}).sort({ updatedAt: -1 }).toArray();
-        const allEpisodes = await episodes.find({}).toArray();
+      return withTimeout(
+        (async () => {
+          try {
+            const { tvShows, episodes } = await getCollectionsRaw();
+            const shows = await tvShows.find({}).sort({ updatedAt: -1 }).toArray();
+            const allEpisodes = await episodes.find({}).toArray();
 
-        return shows.map((s) => ({
-          ...s,
-          episodes: allEpisodes.filter((ep) => ep.showSlug === s.showSlug),
-        }));
-      } catch (err) {
-        console.warn('[MongoDB] getMongoTVShows error:', err);
-        return [];
-      }
+            return shows.map((s) => ({
+              ...s,
+              episodes: allEpisodes.filter((ep) => ep.showSlug === s.showSlug),
+            }));
+          } catch (err) {
+            console.warn('[MongoDB] getMongoTVShows error:', err);
+            return [];
+          }
+        })(),
+        3500,
+        []
+      );
     },
     300_000, // 5 min TTL
     30_000   // 30s SWR
@@ -379,24 +411,30 @@ export async function getMongoTVShowBySlug(
   );
   if (found) return found;
 
-  // Direct database query fallback
-  try {
-    const { tvShows, episodes } = await getCollectionsRaw();
-    const query = isNaN(idNum)
-      ? { showSlug: key }
-      : { $or: [{ showSlug: key }, { tmdb_id: idNum }] };
-    const show = await tvShows.findOne(query as any);
-    if (!show) return null;
+  // Direct database query fallback with 3.5s timeout
+  return withTimeout(
+    (async () => {
+      try {
+        const { tvShows, episodes } = await getCollectionsRaw();
+        const query = isNaN(idNum)
+          ? { showSlug: key }
+          : { $or: [{ showSlug: key }, { tmdb_id: idNum }] };
+        const show = await tvShows.findOne(query as any);
+        if (!show) return null;
 
-    const eps = await episodes.find({ showSlug: show.showSlug }).toArray();
-    return {
-      ...show,
-      episodes: eps,
-    };
-  } catch (err) {
-    console.warn('[MongoDB] getMongoTVShowBySlug error:', err);
-    return null;
-  }
+        const eps = await episodes.find({ showSlug: show.showSlug }).toArray();
+        return {
+          ...show,
+          episodes: eps,
+        };
+      } catch (err) {
+        console.warn('[MongoDB] getMongoTVShowBySlug error:', err);
+        return null;
+      }
+    })(),
+    3500,
+    null
+  );
 }
 
 export async function saveMongoTVShow(

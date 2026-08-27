@@ -6,7 +6,6 @@ import { MovieDetail } from '@/types/tmdb';
 import { getMovieDetails, getImageUrl, searchMovies } from '@/lib/tmdb';
 import siteConfig, { FeaturedItem } from '@/config';
 import { cleanVideoUrl, getMovieUrl } from '@/lib/urls';
-import { getGitHubRawFile, listGitHubDir } from '@/lib/githubStorage';
 import { getMongoMovieBySlug, getMongoMovies } from '@/lib/mongodb/service';
 
 export interface CustomMovieFrontmatter {
@@ -80,16 +79,7 @@ export async function getAllCustomMovieFilesAsync(): Promise<string[]> {
     }
   } catch {}
 
-  const localFiles = getAllCustomMovieFiles();
-  if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
-    try {
-      const ghFiles = await listGitHubDir('video');
-      const mdFiles = ghFiles.filter((file) => file.endsWith('.md') || file.endsWith('.markdown'));
-      const combined = Array.from(new Set([...localFiles, ...mdFiles]));
-      if (combined.length > 0) return combined;
-    } catch {}
-  }
-  return localFiles;
+  return getAllCustomMovieFiles();
 }
 
 /**
@@ -274,25 +264,15 @@ export async function getCustomMovieBySlug(slugOrId: string | number): Promise<C
     }
   }
 
-  // 2. Fetch live file content for matched file
+  // 2. Fetch file content for matched file
   if (matchedFile) {
-    if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
-      try {
-        const liveText = await getGitHubRawFile(`video/${matchedFile}`);
-        if (liveText && liveText.includes('---')) {
-          fileContent = liveText;
-        }
-      } catch {}
-    }
-    if (!fileContent) {
-      try {
-        const filePath = path.join(CONTENT_DIR, matchedFile);
-        if (fs.existsSync(filePath)) {
-          fileContent = fs.readFileSync(filePath, 'utf8');
-        }
-      } catch (err) {
-        console.error(`Error reading ${matchedFile}:`, err);
+    try {
+      const filePath = path.join(CONTENT_DIR, matchedFile);
+      if (fs.existsSync(filePath)) {
+        fileContent = fs.readFileSync(filePath, 'utf8');
       }
+    } catch (err) {
+      console.error(`Error reading ${matchedFile}:`, err);
     }
   }
 
@@ -301,19 +281,9 @@ export async function getCustomMovieBySlug(slugOrId: string | number): Promise<C
     for (const file of files) {
       try {
         let rawContent = '';
-        if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
-          try {
-            const liveText = await getGitHubRawFile(`video/${file}`);
-            if (liveText && liveText.includes('---')) {
-              rawContent = liveText;
-            }
-          } catch {}
-        }
-        if (!rawContent) {
-          const filePath = path.join(CONTENT_DIR, file);
-          if (fs.existsSync(filePath)) {
-            rawContent = fs.readFileSync(filePath, 'utf8');
-          }
+        const filePath = path.join(CONTENT_DIR, file);
+        if (fs.existsSync(filePath)) {
+          rawContent = fs.readFileSync(filePath, 'utf8');
         }
         if (!rawContent) continue;
 
@@ -359,40 +329,6 @@ export async function getCustomMovieBySlug(slugOrId: string | number): Promise<C
       } catch (err) {
         console.error(`Error reading ${file}:`, err);
       }
-    }
-  }
-
-  // 4. Fallback: Check GitHub Raw live if file was just created/updated via CMS before Vercel build
-  if (!matchedFile || !fileContent) {
-    const candidates = [
-      `${cleanKey}.md`,
-      `${cleanWithoutSuffix}.md`,
-      `${searchKey}.md`,
-    ];
-
-    for (const cand of candidates) {
-      try {
-        const liveText = await getGitHubRawFile(`video/${cand}`);
-        if (liveText && liveText.includes('---')) {
-          matchedFile = cand;
-          fileContent = liveText;
-          break;
-        }
-      } catch {
-        // ignore network error
-      }
-    }
-  }
-
-  // 5. If running on Vercel / serverless runtime, fetch live raw markdown from GitHub to always get the latest edits live without waiting for rebuild!
-  if (matchedFile && (process.env.VERCEL || process.env.NODE_ENV === 'production')) {
-    try {
-      const liveText = await getGitHubRawFile(`video/${matchedFile}`);
-      if (liveText && liveText.includes('---')) {
-        fileContent = liveText;
-      }
-    } catch {
-      // ignore network error and use local fileContent fallback
     }
   }
 

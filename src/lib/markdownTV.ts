@@ -6,7 +6,6 @@ import { TVShowDetail } from '@/types/tmdb';
 import { getTVShowDetails, getImageUrl, searchTVShows } from '@/lib/tmdb';
 import { FeaturedItem } from '@/config';
 import { cleanVideoUrl, getTVUrl } from '@/lib/urls';
-import { getGitHubRawFile, listGitHubDir } from '@/lib/githubStorage';
 import { getMongoTVShowBySlug, getMongoTVShows } from '@/lib/mongodb/service';
 
 export interface CustomTVFrontmatter {
@@ -152,15 +151,7 @@ export async function getAllCustomTVShowDirsAsync(): Promise<string[]> {
     }
   } catch {}
 
-  const localDirs = getAllCustomTVShowDirs();
-  if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
-    try {
-      const ghDirs = await listGitHubDir('tv');
-      const combined = Array.from(new Set([...localDirs, ...ghDirs]));
-      if (combined.length > 0) return combined;
-    } catch {}
-  }
-  return localDirs;
+  return getAllCustomTVShowDirs();
 }
 
 /**
@@ -404,22 +395,6 @@ export async function getCustomTVShowBySlug(showSlugOrTmdbId: string | number): 
     }
   }
 
-  // 3. Fallback: Check GitHub Raw live if TV show was just created via CMS before Vercel build
-  if (!matchedDir) {
-    const candSlugs = [cleanWithoutSuffix, searchKey];
-    for (const cSlug of candSlugs) {
-      try {
-        const liveIndex = await getGitHubRawFile(`tv/${cSlug}/_index.md`);
-        if (liveIndex && liveIndex.includes('---')) {
-          matchedDir = cSlug;
-          break;
-        }
-      } catch {
-        // ignore network error
-      }
-    }
-  }
-
   if (!matchedDir) {
     return null;
   }
@@ -436,15 +411,7 @@ export async function getCustomTVShowBySlug(showSlugOrTmdbId: string | number): 
 
   if (indexPath) {
     try {
-      let indexRaw = fs.readFileSync(indexPath, 'utf8');
-      if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
-        try {
-          const liveIndex = await getGitHubRawFile(`tv/${matchedDir}/_index.md`);
-          if (liveIndex && liveIndex.includes('---')) {
-            indexRaw = liveIndex;
-          }
-        } catch {}
-      }
+      const indexRaw = fs.readFileSync(indexPath, 'utf8');
       const { data, content } = matter(indexRaw);
       indexFrontmatter = data as CustomTVFrontmatter;
       if (content && content.trim()) {
@@ -492,15 +459,7 @@ export async function getCustomTVShowBySlug(showSlugOrTmdbId: string | number): 
           const file = epFiles[index];
           try {
             const filePath = path.join(seasonDirPath, file);
-            let raw = fs.readFileSync(filePath, 'utf8');
-            if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
-              try {
-                const liveEp = await getGitHubRawFile(`tv/${matchedDir}/${sDir.name}/${file}`);
-                if (liveEp && liveEp.includes('---')) {
-                  raw = liveEp;
-                }
-              } catch {}
-            }
+            const raw = fs.readFileSync(filePath, 'utf8');
             const { data, content } = matter(raw);
             const frontmatter = data as CustomEpisodeFrontmatter;
 
@@ -573,15 +532,7 @@ export async function getCustomTVShowBySlug(showSlugOrTmdbId: string | number): 
         const file = epFiles[index];
         try {
           const filePath = path.join(showDirFullPath, file);
-          let raw = fs.readFileSync(filePath, 'utf8');
-          if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
-            try {
-              const liveEp = await getGitHubRawFile(`tv/${matchedDir}/${file}`);
-              if (liveEp && liveEp.includes('---')) {
-                raw = liveEp;
-              }
-            } catch {}
-          }
+          const raw = fs.readFileSync(filePath, 'utf8');
           const { data, content } = matter(raw);
           const frontmatter = data as CustomEpisodeFrontmatter;
 
