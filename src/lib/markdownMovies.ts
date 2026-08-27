@@ -63,7 +63,12 @@ export function getAllCustomMovieFiles(): string[] {
   ensureContentDirExists();
   try {
     const files = fs.readdirSync(CONTENT_DIR);
-    return files.filter((file) => file.endsWith('.md') || file.endsWith('.markdown'));
+    return files.filter(
+      (file) =>
+        (file.endsWith('.md') || file.endsWith('.markdown')) &&
+        !file.startsWith('.') &&
+        file.replace(/\.(md|markdown)$/i, '').trim().length > 0
+    );
   } catch (error) {
     console.error('Error reading custom movie files:', error);
     return [];
@@ -74,7 +79,9 @@ export async function getAllCustomMovieFilesAsync(): Promise<string[]> {
   try {
     const mongoDocs = await getMongoMovies();
     if (mongoDocs && mongoDocs.length > 0) {
-      const mongoFiles = mongoDocs.map((m) => `${m.slug}.md`);
+      const mongoFiles = mongoDocs
+        .filter((m) => m.slug && m.slug.trim().length > 0)
+        .map((m) => `${m.slug}.md`);
       const localFiles = getAllCustomMovieFiles();
       return Array.from(new Set([...mongoFiles, ...localFiles]));
     }
@@ -109,9 +116,11 @@ export function getAllCustomMovieSlugs(): string[] {
   const slugs: string[] = [];
 
   files.forEach((file) => {
-    const baseSlug = file.replace(/\.(md|markdown)$/i, '');
-    slugs.push(baseSlug);
-    slugs.push(file);
+    const baseSlug = file.replace(/\.(md|markdown)$/i, '').trim();
+    if (baseSlug) {
+      slugs.push(baseSlug);
+      slugs.push(file);
+    }
 
     try {
       const filePath = path.join(CONTENT_DIR, file);
@@ -531,108 +540,122 @@ export async function getMovieDetailsWithCustomOverride(
  * Returns all custom markdown movies that have `featured: true` in their frontmatter.
  */
 export async function getAllFeaturedCustomMovies(): Promise<FeaturedItem[]> {
-  try {
-    const mongoMovies = await getMongoMovies();
-    const featured = mongoMovies.filter((m) => Boolean(m.featured));
-    return await Promise.all(
-      featured.map(async (m) => {
-        let overview = (m.deskripsi || (m as any).description || (m as any).overview || '').trim();
-        let rating = m.rating || 0;
-        let genres: string[] = [];
-        let posterUrl = '/placeholder-poster.svg';
-        let backdropUrl = '/placeholder-poster.svg';
+  return memoryCache.getOrFetch<FeaturedItem[]>(
+    'featured_custom_movies_list',
+    async () => {
+      try {
+        const mongoMovies = await getMongoMovies();
+        const featured = mongoMovies.filter((m) => Boolean(m.featured));
+        return await Promise.all(
+          featured.map(async (m) => {
+            let overview = (m.deskripsi || (m as any).description || (m as any).overview || '').trim();
+            let rating = m.rating || 0;
+            let genres: string[] = [];
+            let posterUrl = '/placeholder-poster.svg';
+            let backdropUrl = '/placeholder-poster.svg';
 
-        if (m.tmdb_id) {
-          try {
-            const tmdb = await getMovieDetails(Number(m.tmdb_id));
-            if (tmdb) {
-              if (tmdb.poster_path) posterUrl = getImageUrl(tmdb.poster_path, 'w500');
-              if (tmdb.backdrop_path) backdropUrl = getImageUrl(tmdb.backdrop_path, 'w1280');
-              if (!overview && tmdb.overview) overview = tmdb.overview;
-              if (!rating && tmdb.vote_average) rating = Math.round(tmdb.vote_average * 10) / 10;
-              if (tmdb.genres) genres = tmdb.genres.map((g) => g.name);
+            if (m.tmdb_id) {
+              try {
+                const tmdb = await getMovieDetails(Number(m.tmdb_id));
+                if (tmdb) {
+                  if (tmdb.poster_path) posterUrl = getImageUrl(tmdb.poster_path, 'w500');
+                  if (tmdb.backdrop_path) backdropUrl = getImageUrl(tmdb.backdrop_path, 'w1280');
+                  if (!overview && tmdb.overview) overview = tmdb.overview;
+                  if (!rating && tmdb.vote_average) rating = Math.round(tmdb.vote_average * 10) / 10;
+                  if (tmdb.genres) genres = tmdb.genres.map((g) => g.name);
+                }
+              } catch {}
             }
-          } catch {}
-        }
 
-        if (posterUrl === '/placeholder-poster.svg' && m.image_url) {
-          posterUrl = getImageUrl(m.image_url, 'w500');
-          backdropUrl = getImageUrl(m.image_url, 'w1280');
-        }
+            if (posterUrl === '/placeholder-poster.svg' && m.image_url) {
+              posterUrl = getImageUrl(m.image_url, 'w500');
+              backdropUrl = getImageUrl(m.image_url, 'w1280');
+            }
 
-        return {
-          id: `movie-${m.slug}`,
-          tmdbId: m.tmdb_id || 0,
-          title: m.title || m.slug,
-          tagline: undefined,
-          overview: overview || 'Tonton film ini dengan kualitas terbaik di LeviStream.',
-          backdropUrl,
-          posterUrl,
-          rating: rating || 8.5,
-          year: '2026',
-          duration: m.duration || undefined,
-          type: 'movie' as const,
-          genres,
-          link: `/movie/${m.slug}`,
-          badge: 'Featured',
-          featured: true,
-          isCustom: true,
-        } as FeaturedItem;
-      })
-    );
-  } catch (err) {
-    console.warn('[markdownMovies] getAllFeaturedCustomMovies error:', err);
-    return [];
-  }
+            return {
+              id: `movie-${m.slug}`,
+              tmdbId: m.tmdb_id || 0,
+              title: m.title || m.slug,
+              tagline: undefined,
+              overview: overview || 'Tonton film ini dengan kualitas terbaik di LeviStream.',
+              backdropUrl,
+              posterUrl,
+              rating: rating || 8.5,
+              year: '2026',
+              duration: m.duration || undefined,
+              type: 'movie' as const,
+              genres,
+              link: `/movie/${m.slug}`,
+              badge: 'Featured',
+              featured: true,
+              isCustom: true,
+            } as FeaturedItem;
+          })
+        );
+      } catch (err) {
+        console.warn('[markdownMovies] getAllFeaturedCustomMovies error:', err);
+        return [];
+      }
+    },
+    120_000,
+    30_000
+  );
 }
 
 /**
  * Returns all custom movies formatted as Movie objects for display in homepage rows and grids.
  */
 export async function getAllCustomMoviesForList(): Promise<any[]> {
-  try {
-    const mongoMovies = await getMongoMovies();
-    return await Promise.all(
-      mongoMovies.map(async (m) => {
-        let poster: string | null = null;
-        let backdrop: string | null = null;
-        let rating = m.rating || 0;
-        let overview = m.deskripsi || '';
+  return memoryCache.getOrFetch<any[]>(
+    'custom_movies_for_list',
+    async () => {
+      try {
+        const mongoMovies = await getMongoMovies();
+        return await Promise.all(
+          mongoMovies.map(async (m) => {
+            let poster: string | null = null;
+            let backdrop: string | null = null;
+            let rating = m.rating || 0;
+            let overview = m.deskripsi || '';
 
-        if (m.tmdb_id) {
-          try {
-            const tmdb = await getMovieDetails(Number(m.tmdb_id));
-            if (tmdb) {
-              poster = tmdb.poster_path || null;
-              backdrop = tmdb.backdrop_path || null;
-              if (!overview && tmdb.overview) overview = tmdb.overview;
-              if (!rating && tmdb.vote_average) rating = Math.round(tmdb.vote_average * 10) / 10;
+            if (m.tmdb_id) {
+              try {
+                const tmdb = await getMovieDetails(Number(m.tmdb_id));
+                if (tmdb) {
+                  poster = tmdb.poster_path || null;
+                  backdrop = tmdb.backdrop_path || null;
+                  if (!overview && tmdb.overview) overview = tmdb.overview;
+                  if (!rating && tmdb.vote_average) rating = Math.round(tmdb.vote_average * 10) / 10;
+                }
+              } catch {}
             }
-          } catch {}
-        }
 
-        return {
-          id: m.tmdb_id || m.slug,
-          title: m.title || m.slug,
-          overview,
-          poster_path: poster,
-          backdrop_path: backdrop,
-          release_date: '2026-01-01',
-          vote_average: rating,
-          vote_count: 0,
-          genre_ids: [],
-          popularity: 100,
-          adult: false,
-          video: false,
-          isCustomMarkdown: true,
-          customSlug: m.slug,
-          customVideoUrl: m.videourl,
-          customImageUrl: m.image_url || null,
-        };
-      })
-    );
-  } catch (err) {
-    console.warn('[markdownMovies] getAllCustomMoviesForList error:', err);
-    return [];
-  }
+            return {
+              id: m.tmdb_id || m.slug,
+              title: m.title || m.slug,
+              overview,
+              poster_path: poster,
+              backdrop_path: backdrop,
+              release_date: '2026-01-01',
+              vote_average: rating,
+              vote_count: 0,
+              genre_ids: [],
+              popularity: 100,
+              adult: false,
+              video: false,
+              isCustomMarkdown: true,
+              customSlug: m.slug,
+              customVideoUrl: m.videourl,
+              customImageUrl: m.image_url || null,
+            };
+          })
+        );
+      } catch (err) {
+        console.warn('[markdownMovies] getAllCustomMoviesForList error:', err);
+        return [];
+      }
+    },
+    120_000,
+    30_000
+  );
 }

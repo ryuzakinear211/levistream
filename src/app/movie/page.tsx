@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import type { Metadata } from 'next';
 import MoviePageClient from './MoviePageClient';
+import BrowseGridSkeleton from '@/components/skeletons/BrowseGridSkeleton';
 import siteConfig from '@/config';
 
 export const metadata: Metadata = {
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function MoviePage() {
   return (
-    <Suspense fallback={<div className="min-h-screen pt-24 px-4" style={{ background: '#050816' }} />}>
+    <Suspense fallback={<BrowseGridSkeleton title="Browse Movies" />}>
       <MoviePageClient />
     </Suspense>
   );
