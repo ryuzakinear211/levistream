@@ -50,7 +50,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const embedUrl = `${siteUrl}/embed/movie/${params.id}`;
 
   const image = movie.customImageUrl
-    ? getImageUrl(movie.customImageUrl, 'w1280')
+    ? (movie.customImageUrl.startsWith('http') ? movie.customImageUrl : getImageUrl(movie.customImageUrl, 'w1280'))
     : movie.backdrop_path
     ? getImageUrl(movie.backdrop_path, 'w1280')
     : movie.poster_path
@@ -190,14 +190,15 @@ export default async function MovieDetailPage({ params }: PageProps) {
   const defaultBackdrop = movie.backdrop_path
     ? getImageUrl(movie.backdrop_path, 'original')
     : undefined;
-  const thumbnailImage = movie.customImageUrl
-    ? getImageUrl(movie.customImageUrl, 'w1280')
-    : defaultBackdrop || posterImage;
+  const thumbnailImage =
+    (movie.customImageUrl ? (movie.customImageUrl.startsWith('http') ? movie.customImageUrl : getImageUrl(movie.customImageUrl, 'w1280')) : null) ||
+    defaultBackdrop ||
+    posterImage;
 
   const yearStr = year ? ` (${year})` : '';
   const creditSuffix = siteConfig.useCreditTitleForRave && siteConfig.name ? ` | ${siteConfig.name}` : '';
   const videoTitle = `${movie.title}${yearStr}${creditSuffix}`;
-  const videoDescription = movie.overview || `Nonton full streaming film ${movie.title} sub indo kualitas HD.`;
+  const videoDescription = movie.overview || `Streaming film ${movie.title} full movie sub indo.`;
   const uploadDate = movie.release_date ? `${movie.release_date}T00:00:00+07:00` : '2026-08-24T00:00:00+07:00';
   const durationIso = formatIsoDuration(movie.runtime || '120m');
 
