@@ -336,12 +336,14 @@ export async function fetchAllAdminContent(ghConfig: GitHubOptions) {
         } catch {}
       }
 
-      const customImg = m.frontmatter.image_url || m.frontmatter.poster_path || m.frontmatter.backdrop_url;
+      const customImg = m.frontmatter.image_url || null;
       let posterUrl: string | null = null;
-      if (customImg && String(customImg).trim()) {
-        posterUrl = getImageUrl(String(customImg).trim(), 'w500');
-      } else if (tmdbPoster) {
+      if (tmdbPoster) {
         posterUrl = tmdbPoster;
+      } else if (m.frontmatter.poster_path) {
+        posterUrl = getImageUrl(String(m.frontmatter.poster_path).trim(), 'w500');
+      } else if (customImg && String(customImg).trim()) {
+        posterUrl = getImageUrl(String(customImg).trim(), 'w500');
       }
 
       return {
@@ -357,7 +359,7 @@ export async function fetchAllAdminContent(ghConfig: GitHubOptions) {
 
   movies.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
-  // Enrich TV Shows with TMDB metadata & STRICT PRECEDENCE for custom frontmatter image
+  // Enrich TV Shows with TMDB metadata & separate poster from custom player image
   const rawTvShows = Array.from(rawTvShowsMap.values());
   const tvShows = await Promise.all(
     rawTvShows.map(async (s) => {
@@ -386,16 +388,14 @@ export async function fetchAllAdminContent(ghConfig: GitHubOptions) {
         } catch {}
       }
 
-      const customImg =
-        s.indexFrontmatter.image_url ||
-        s.indexFrontmatter.poster_path ||
-        s.indexFrontmatter.backdrop_url;
-
+      const customImg = s.indexFrontmatter.image_url || null;
       let posterUrl: string | null = null;
-      if (customImg && String(customImg).trim()) {
-        posterUrl = getImageUrl(String(customImg).trim(), 'w500');
-      } else if (tmdbPoster) {
+      if (tmdbPoster) {
         posterUrl = tmdbPoster;
+      } else if (s.indexFrontmatter.poster_path) {
+        posterUrl = getImageUrl(String(s.indexFrontmatter.poster_path).trim(), 'w500');
+      } else if (customImg && String(customImg).trim()) {
+        posterUrl = getImageUrl(String(customImg).trim(), 'w500');
       }
 
       return {

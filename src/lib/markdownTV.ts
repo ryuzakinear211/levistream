@@ -696,7 +696,7 @@ export async function getTVShowDetailsWithCustomOverride(
 
   const overriddenOverview = (frontmatter.deskripsi || frontmatter.description)?.trim() || tmdbShow?.overview || '';
   const overriddenTagline = frontmatter.tagline?.trim() || tmdbShow?.tagline || '';
-  const customImageUrl = frontmatter.image_url || frontmatter.poster_path || frontmatter.backdrop_url || null;
+  const customImageUrl = frontmatter.image_url || null;
 
   // Determine active episode
   let activeEpisode: CustomEpisode | null = null;
@@ -714,8 +714,9 @@ export async function getTVShowDetailsWithCustomOverride(
       ) || null;
   }
 
-  const overriddenPoster = customImageUrl || tmdbShow?.poster_path || null;
-  const overriddenBackdrop = customImageUrl || tmdbShow?.backdrop_path || null;
+  // Poster and backdrop strictly use TMDB or explicit custom poster fields, NOT image_url (which is reserved for player/generic content)
+  const overriddenPoster = (frontmatter.poster_path ? frontmatter.poster_path : tmdbShow?.poster_path) || null;
+  const overriddenBackdrop = (frontmatter.backdrop_url ? frontmatter.backdrop_url : tmdbShow?.backdrop_path) || null;
 
   return {
     ...(tmdbShow || {}),
@@ -736,10 +737,10 @@ export async function getTVShowDetailsWithCustomOverride(
     customImageUrl,
     customContentHtml: contentHtml,
     hasSeasons,
-        seasonsList: seasons,
-        allEpisodes,
-        activeEpisode,
-      } as any;
+    seasonsList: seasons,
+    allEpisodes,
+    activeEpisode,
+  } as any;
     },
     60_000,
     15_000
@@ -786,21 +787,28 @@ export async function getAllFeaturedCustomTV(): Promise<FeaturedItem[]> {
     const featured = mongoShows.filter((s) => Boolean(s.featured));
     return await Promise.all(
       featured.map(async (s) => {
-        const img = s.image_url || '/placeholder-poster.svg';
         let overview = (s.deskripsi || (s as any).description || (s as any).overview || '').trim();
         let rating = s.rating || 0;
         let genres: string[] = [];
+        let posterUrl = '/placeholder-poster.svg';
+        let backdropUrl = '/placeholder-poster.svg';
 
-        // If description is empty in custom record but tmdb_id is present, fetch TMDB details to enrich overview
-        if (!overview && s.tmdb_id) {
+        if (s.tmdb_id) {
           try {
             const tmdb = await getTVShowDetails(Number(s.tmdb_id));
             if (tmdb) {
-              if (tmdb.overview) overview = tmdb.overview;
+              if (tmdb.poster_path) posterUrl = getImageUrl(tmdb.poster_path, 'w500');
+              if (tmdb.backdrop_path) backdropUrl = getImageUrl(tmdb.backdrop_path, 'w1280');
+              if (!overview && tmdb.overview) overview = tmdb.overview;
               if (!rating && tmdb.vote_average) rating = Math.round(tmdb.vote_average * 10) / 10;
               if (tmdb.genres) genres = tmdb.genres.map((g) => g.name);
             }
           } catch {}
+        }
+
+        if (posterUrl === '/placeholder-poster.svg' && s.image_url) {
+          posterUrl = getImageUrl(s.image_url, 'w500');
+          backdropUrl = getImageUrl(s.image_url, 'w1280');
         }
 
         const firstEp = s.episodes?.[0];
@@ -813,8 +821,8 @@ export async function getAllFeaturedCustomTV(): Promise<FeaturedItem[]> {
           title: s.title || s.showSlug,
           tagline: undefined,
           overview: overview || 'Saksikan serial seru ini dengan kualitas terbaik di LeviStream.',
-          backdropUrl: img,
-          posterUrl: img,
+          backdropUrl,
+          posterUrl,
           rating: rating || 8.5,
           year: '2026',
           duration: s.episodes?.length ? `${s.episodes.length} Episodes` : undefined,
@@ -839,24 +847,42 @@ export async function getAllFeaturedCustomTV(): Promise<FeaturedItem[]> {
 export async function getAllCustomTVShowsForList(): Promise<any[]> {
   try {
     const mongoShows = await getMongoTVShows();
-    return mongoShows.map((s) => {
-      const poster = s.image_url || null;
-      return {
-        id: s.tmdb_id || s.showSlug,
-        name: s.title || s.showSlug,
-        overview: s.deskripsi || '',
-        poster_path: poster,
-        backdrop_path: poster,
-        first_air_date: '2026-01-01',
-        vote_average: s.rating || 0,
-        vote_count: 0,
-        genre_ids: [],
-        popularity: 100,
-        isCustomTV: true,
-        customSlug: s.showSlug,
-        customImageUrl: s.image_url,
-      };
-    });
+    return await Promise.all(
+      mongoShows.map(async (s) => {
+        let poster: string | null = null;
+        let backdrop: string | null = null;
+        let rating = s.rating || 0;
+        let overview = s.deskripsi || '';
+
+        if (s.tmdb_id) {
+          try {
+            const tmdb = await getTVShowDetails(Number(s.tmdb_id));
+            if (tmdb) {
+              poster = tmdb.poster_path || null;
+              backdrop = tmdb.backdrop_path || null;
+              if (!overview && tmdb.overview) overview = tmdb.overview;
+              if (!rating && tmdb.vote_average) rating = Math.round(tmdb.vote_average * 10) / 10;
+            }
+          } catch {}
+        }
+
+        return {
+          id: s.tmdb_id || s.showSlug,
+          name: s.title || s.showSlug,
+          overview,
+          poster_path: poster,
+          backdrop_path: backdrop,
+          first_air_date: '2026-01-01',
+          vote_average: rating,
+          vote_count: 0,
+          genre_ids: [],
+          popularity: 100,
+          isCustomTV: true,
+          customSlug: s.showSlug,
+          customImageUrl: s.image_url || null,
+        };
+      })
+    );
   } catch (err) {
     console.warn('[markdownTV] getAllCustomTVShowsForList error:', err);
     return [];

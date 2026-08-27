@@ -176,21 +176,18 @@ export default async function MovieDetailPage({ params }: PageProps) {
   const pageUrl = `${siteUrl}/movie/${params.id}`;
   const embedUrl = `${siteUrl}/embed/movie/${params.id}`;
 
-  const posterImage = movie.customImageUrl
-    ? getImageUrl(movie.customImageUrl, 'w780')
-    : movie.poster_path
+  // 1. Poster for detail hero card / display (Own official data source from TMDB)
+  const posterImage = movie.poster_path
     ? getImageUrl(movie.poster_path, 'w500')
     : (movie.backdrop_path ? getImageUrl(movie.backdrop_path, 'w780') : '/placeholder-poster.svg');
 
-  const heroBackdrop = movie.customImageUrl
-    ? getImageUrl(movie.customImageUrl, 'w1280')
-    : movie.backdrop_path
+  // 2. Backdrop for ambient background
+  const heroBackdrop = movie.backdrop_path
     ? getImageUrl(movie.backdrop_path, 'original')
     : posterImage;
 
-  const defaultBackdrop = movie.customImageUrl
-    ? getImageUrl(movie.customImageUrl, 'w1280')
-    : movie.backdrop_path
+  // 3. Dedicated image for Player & JSON-LD thumbnailUrl (generic content)
+  const defaultBackdrop = movie.backdrop_path
     ? getImageUrl(movie.backdrop_path, 'original')
     : undefined;
   const thumbnailImage = movie.customImageUrl
@@ -213,8 +210,8 @@ export default async function MovieDetailPage({ params }: PageProps) {
         thumbnailUrl: [thumbnailImage],
         uploadDate: uploadDate,
         duration: durationIso,
-        contentUrl: videoUrl,
-        embedUrl: videoUrl,
+        contentUrl: pageUrl,
+        embedUrl: embedUrl,
         publisher: {
           '@type': 'Organization',
           name: siteConfig.name,

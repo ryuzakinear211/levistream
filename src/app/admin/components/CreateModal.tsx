@@ -590,11 +590,11 @@ export const CreateModal: React.FC<CreateModalProps> = ({
             </div>
           )}
 
-          {/* Poster & Backdrop Picker */}
+          {/* Player / Generic Content Thumbnail Image (image_url) */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-bold text-slate-300">
-                Image Poster / Backdrop URL
+                Image Player & Generic Content (image_url)
               </label>
               {tmdbPreview?.backdrops && tmdbPreview.backdrops.length > 0 && (
                 <button
@@ -616,9 +616,12 @@ export const CreateModal: React.FC<CreateModalProps> = ({
               type="text"
               value={formPoster}
               onChange={(e) => setFormPoster(e.target.value)}
-              placeholder="https://image.tmdb.org/t/p/..."
+              placeholder="https://image.tmdb.org/t/p/... atau URL gambar kustom"
               className="w-full px-3.5 py-2.5 sm:py-3 bg-black/50 border border-white/10 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 min-h-[42px]"
             />
+            <p className="text-[10px] text-slate-400 mt-1">
+              Khusus digunakan untuk poster video player & JSON-LD thumbnailUrl (tidak mengubah poster utama di homepage).
+            </p>
 
             {showBackdropPicker && tmdbPreview?.backdrops && (
               <BackdropPicker

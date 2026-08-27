@@ -417,8 +417,8 @@ export async function getMovieDetailsWithCustomOverride(
         title: frontmatter.title || customMovie.slug,
         tagline: frontmatter.tagline || '',
         overview: (frontmatter.deskripsi || frontmatter.description || '').trim(),
-        poster_path: frontmatter.image_url || frontmatter.poster_path || null,
-        backdrop_path: frontmatter.backdrop_url || frontmatter.image_url || null,
+        poster_path: frontmatter.poster_path || null,
+        backdrop_path: frontmatter.backdrop_url || null,
         release_date: frontmatter.year ? `${frontmatter.year}-01-01` : '2026-01-01',
         vote_average: frontmatter.rating ? Number(frontmatter.rating) : 0,
         vote_count: 0,
@@ -448,8 +448,8 @@ export async function getMovieDetailsWithCustomOverride(
         title: frontmatter.title || customMovie.slug,
         tagline: frontmatter.tagline || '',
         overview: (frontmatter.deskripsi || frontmatter.description || '').trim(),
-        poster_path: frontmatter.image_url || frontmatter.poster_path || null,
-        backdrop_path: frontmatter.backdrop_url || frontmatter.image_url || null,
+        poster_path: frontmatter.poster_path || null,
+        backdrop_path: frontmatter.backdrop_url || null,
         release_date: frontmatter.year ? `${frontmatter.year}-01-01` : '2026-01-01',
         vote_average: frontmatter.rating ? Number(frontmatter.rating) : 0,
         vote_count: 0,
@@ -495,11 +495,12 @@ export async function getMovieDetailsWithCustomOverride(
   const overriddenTagline = frontmatter.tagline?.trim() || tmdbMovie.tagline;
 
   const videoUrl = cleanVideoUrl(frontmatter.videourl || frontmatter.video_url);
-  const imageUrl = frontmatter.image_url || frontmatter.poster_path || frontmatter.backdrop_url || null;
+  const imageUrl = frontmatter.image_url || null;
   const subtitles = frontmatter.subtitles || frontmatter.subtitle || frontmatter.subtitle_url || frontmatter.sub_url || frontmatter.caption_url || null;
 
-  const overriddenPoster = imageUrl || tmdbMovie.poster_path;
-  const overriddenBackdrop = frontmatter.backdrop_url || imageUrl || tmdbMovie.backdrop_path;
+  // Poster and backdrop strictly use TMDB or explicit custom poster fields, NOT image_url (which is reserved for player/generic content)
+  const overriddenPoster = (frontmatter.poster_path ? frontmatter.poster_path : tmdbMovie.poster_path) || null;
+  const overriddenBackdrop = (frontmatter.backdrop_url ? frontmatter.backdrop_url : tmdbMovie.backdrop_path) || null;
   const overriddenReleaseDate = frontmatter.year ? `${frontmatter.year}-01-01` : (frontmatter.release_date || tmdbMovie.release_date);
   const overriddenRuntime = frontmatter.duration ? (typeof frontmatter.duration === 'number' ? frontmatter.duration : tmdbMovie.runtime) : tmdbMovie.runtime;
 
@@ -517,9 +518,9 @@ export async function getMovieDetailsWithCustomOverride(
     customSlug: customMovie.slug,
     customVideoUrl: videoUrl,
     customImageUrl: imageUrl,
-        customSubtitles: subtitles,
-        customContentHtml: contentHtml && contentHtml.trim().length > 0 ? contentHtml : null,
-      };
+    customSubtitles: subtitles,
+    customContentHtml: contentHtml && contentHtml.trim().length > 0 ? contentHtml : null,
+  };
     },
     60_000,
     15_000
@@ -535,21 +536,28 @@ export async function getAllFeaturedCustomMovies(): Promise<FeaturedItem[]> {
     const featured = mongoMovies.filter((m) => Boolean(m.featured));
     return await Promise.all(
       featured.map(async (m) => {
-        const img = m.image_url || '/placeholder-poster.svg';
         let overview = (m.deskripsi || (m as any).description || (m as any).overview || '').trim();
         let rating = m.rating || 0;
         let genres: string[] = [];
+        let posterUrl = '/placeholder-poster.svg';
+        let backdropUrl = '/placeholder-poster.svg';
 
-        // If description is empty in custom record but tmdb_id is present, fetch TMDB details to enrich overview
-        if (!overview && m.tmdb_id) {
+        if (m.tmdb_id) {
           try {
             const tmdb = await getMovieDetails(Number(m.tmdb_id));
             if (tmdb) {
-              if (tmdb.overview) overview = tmdb.overview;
+              if (tmdb.poster_path) posterUrl = getImageUrl(tmdb.poster_path, 'w500');
+              if (tmdb.backdrop_path) backdropUrl = getImageUrl(tmdb.backdrop_path, 'w1280');
+              if (!overview && tmdb.overview) overview = tmdb.overview;
               if (!rating && tmdb.vote_average) rating = Math.round(tmdb.vote_average * 10) / 10;
               if (tmdb.genres) genres = tmdb.genres.map((g) => g.name);
             }
           } catch {}
+        }
+
+        if (posterUrl === '/placeholder-poster.svg' && m.image_url) {
+          posterUrl = getImageUrl(m.image_url, 'w500');
+          backdropUrl = getImageUrl(m.image_url, 'w1280');
         }
 
         return {
@@ -558,8 +566,8 @@ export async function getAllFeaturedCustomMovies(): Promise<FeaturedItem[]> {
           title: m.title || m.slug,
           tagline: undefined,
           overview: overview || 'Tonton film ini dengan kualitas terbaik di LeviStream.',
-          backdropUrl: img,
-          posterUrl: img,
+          backdropUrl,
+          posterUrl,
           rating: rating || 8.5,
           year: '2026',
           duration: m.duration || undefined,
@@ -584,27 +592,45 @@ export async function getAllFeaturedCustomMovies(): Promise<FeaturedItem[]> {
 export async function getAllCustomMoviesForList(): Promise<any[]> {
   try {
     const mongoMovies = await getMongoMovies();
-    return mongoMovies.map((m) => {
-      const poster = m.image_url || null;
-      return {
-        id: m.tmdb_id || m.slug,
-        title: m.title || m.slug,
-        overview: m.deskripsi || '',
-        poster_path: poster,
-        backdrop_path: poster,
-        release_date: '2026-01-01',
-        vote_average: m.rating || 0,
-        vote_count: 0,
-        genre_ids: [],
-        popularity: 100,
-        adult: false,
-        video: false,
-        isCustomMarkdown: true,
-        customSlug: m.slug,
-        customVideoUrl: m.videourl,
-        customImageUrl: m.image_url,
-      };
-    });
+    return await Promise.all(
+      mongoMovies.map(async (m) => {
+        let poster: string | null = null;
+        let backdrop: string | null = null;
+        let rating = m.rating || 0;
+        let overview = m.deskripsi || '';
+
+        if (m.tmdb_id) {
+          try {
+            const tmdb = await getMovieDetails(Number(m.tmdb_id));
+            if (tmdb) {
+              poster = tmdb.poster_path || null;
+              backdrop = tmdb.backdrop_path || null;
+              if (!overview && tmdb.overview) overview = tmdb.overview;
+              if (!rating && tmdb.vote_average) rating = Math.round(tmdb.vote_average * 10) / 10;
+            }
+          } catch {}
+        }
+
+        return {
+          id: m.tmdb_id || m.slug,
+          title: m.title || m.slug,
+          overview,
+          poster_path: poster,
+          backdrop_path: backdrop,
+          release_date: '2026-01-01',
+          vote_average: rating,
+          vote_count: 0,
+          genre_ids: [],
+          popularity: 100,
+          adult: false,
+          video: false,
+          isCustomMarkdown: true,
+          customSlug: m.slug,
+          customVideoUrl: m.videourl,
+          customImageUrl: m.image_url || null,
+        };
+      })
+    );
   } catch (err) {
     console.warn('[markdownMovies] getAllCustomMoviesForList error:', err);
     return [];

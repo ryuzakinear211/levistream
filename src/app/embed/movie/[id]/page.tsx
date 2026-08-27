@@ -115,9 +115,7 @@ export default async function MovieEmbedPage({ params }: PageProps) {
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || siteConfig.url;
   const videoUrl = movie.customVideoUrl;
-  const defaultBackdrop = movie.customImageUrl
-    ? getImageUrl(movie.customImageUrl, 'w1280')
-    : movie.backdrop_path
+  const defaultBackdrop = movie.backdrop_path
     ? getImageUrl(movie.backdrop_path, 'original')
     : undefined;
   const thumbnailImage = movie.customImageUrl

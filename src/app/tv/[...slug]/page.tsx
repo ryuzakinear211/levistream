@@ -184,25 +184,23 @@ export default async function TVShowPage({ params }: PageProps) {
     data.videos?.results?.[0];
   const trailerKey = trailer?.key || null;
 
-  const posterImage = data.customImageUrl
-    ? getImageUrl(data.customImageUrl, 'w780')
-    : data.poster_path
+  // 1. Poster for detail hero card / display (Own official data source from TMDB)
+  const posterImage = data.poster_path
     ? getImageUrl(data.poster_path, 'w500')
     : (data.backdrop_path ? getImageUrl(data.backdrop_path, 'w780') : '/placeholder-poster.svg');
 
-  const heroBackdrop = data.customImageUrl
-    ? getImageUrl(data.customImageUrl, 'w1280')
-    : data.backdrop_path
+  // 2. Backdrop for ambient background
+  const heroBackdrop = data.backdrop_path
     ? getImageUrl(data.backdrop_path, 'original')
     : posterImage;
 
-  const defaultBackdrop = data.customImageUrl
-    ? getImageUrl(data.customImageUrl, 'w1280')
-    : data.backdrop_path
+  // 3. Dedicated image for Player & JSON-LD thumbnailUrl (generic content)
+  const defaultBackdrop = data.backdrop_path
     ? getImageUrl(data.backdrop_path, 'original')
     : undefined;
   const thumbnailImage =
     (activeEpisode?.imageUrl ? getImageUrl(activeEpisode.imageUrl, 'w1280') : null) ||
+    (data.customImageUrl ? getImageUrl(data.customImageUrl, 'w1280') : null) ||
     defaultBackdrop ||
     posterImage;
 
@@ -223,8 +221,8 @@ export default async function TVShowPage({ params }: PageProps) {
         thumbnailUrl: [thumbnailImage],
         uploadDate: uploadDate,
         duration: durationIso,
-        contentUrl: videoUrl,
-        embedUrl: videoUrl,
+        contentUrl: pageUrl,
+        embedUrl: embedUrl,
         publisher: {
           '@type': 'Organization',
           name: siteConfig.name,
