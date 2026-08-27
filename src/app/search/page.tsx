@@ -308,7 +308,7 @@ function SearchContent() {
         {!loading && results.length > 0 && (
           <>
             <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3.5 sm:gap-4.5 md:gap-5">
-              {results.map((item) => {
+              {results.map((item, idx) => {
                 const itemType =
                   (item as any).media_type === 'tv' || !('title' in item) ? 'tv' : 'movie';
                 return (
@@ -316,6 +316,7 @@ function SearchContent() {
                     key={`${(item as any).media_type || searchType}_${item.id}`}
                     item={item}
                     type={itemType}
+                    priority={idx < 6}
                   />
                 );
               })}

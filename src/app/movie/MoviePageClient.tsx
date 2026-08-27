@@ -226,8 +226,8 @@ export default function MoviePageClient({
           </div>
         ) : movies.length > 0 ? (
           <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3.5 sm:gap-4.5 md:gap-5">
-            {movies.map((movie) => (
-              <MovieCard key={movie.id} item={movie} type="movie" />
+            {movies.map((movie, i) => (
+              <MovieCard key={movie.id} item={movie} type="movie" priority={i < 6} />
             ))}
           </div>
         ) : (

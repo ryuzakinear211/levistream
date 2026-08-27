@@ -14,7 +14,7 @@ const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_TMDB_IMAGE_BASE_URL || 'https://i
 
 import { memoryCache } from '@/lib/cache';
 
-export type ImageSize = 'w200' | 'w300' | 'w400' | 'w500' | 'w780' | 'w1280' | 'original';
+export type ImageSize = 'w185' | 'w200' | 'w300' | 'w342' | 'w400' | 'w500' | 'w780' | 'w1280' | 'original';
 
 async function fetchTMDB<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
   const mergedParams: Record<string, string> = {

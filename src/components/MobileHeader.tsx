@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   Menu,
   X,
+  LogIn,
   Home,
   Film,
   Tv,
@@ -20,6 +21,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { Genre } from '@/types/tmdb';
+import { useAuth } from '@/context/AuthContext';
 import siteConfig from '@/config';
 
 interface MobileHeaderProps {
@@ -27,6 +29,7 @@ interface MobileHeaderProps {
 }
 
 export default function MobileHeader({ genres = [] }: MobileHeaderProps) {
+  const { user, authStatus, isLoggedIn } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -131,20 +134,51 @@ export default function MobileHeader({ genres = [] }: MobileHeaderProps) {
           </span>
         </Link>
 
-        {/* Right: Search Quick Link & Hamburger Menu */}
+        {/* Right: Login / Profile Button FIRST, followed by Search & Hamburger Menu */}
         <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Search Button */}
-          <Link
-            href="/search"
-            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all duration-200 active:scale-95 text-slate-300 hover:text-cyan-400"
-            style={{
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-            }}
-            aria-label="Cari Film & Serial"
-          >
-            <Search size={18} />
-          </Link>
+          {/* Distinctive Glassmorphic Login / Profile Button beside hamburger icon */}
+          {authStatus === 'initializing' ? (
+            <div className="w-20 h-8 rounded-xl bg-white/[0.08] skeleton" />
+          ) : isLoggedIn && user ? (
+            <Link
+              href="/profile"
+              className="px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold text-cyan-300 transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5"
+              style={{
+                background:
+                  'linear-gradient(135deg, rgba(6, 182, 212, 0.18) 0%, rgba(124, 58, 237, 0.22) 100%)',
+                border: '1px solid rgba(6, 182, 212, 0.45)',
+                boxShadow: '0 0 16px rgba(6, 182, 212, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
+              }}
+            >
+              <div
+                className="w-5 h-5 rounded-lg flex items-center justify-center overflow-hidden border border-cyan-400/60 shadow-[0_0_8px_rgba(6,182,212,0.4)]"
+                style={{ background: 'linear-gradient(135deg, #06b6d4, #7c3aed)' }}
+              >
+                {user.avatar ? (
+                  <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="font-black text-[10px] text-white">
+                    {user.username.charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <span className="max-w-[70px] truncate text-white">{user.username}</span>
+            </Link>
+          ) : (
+            <Link
+              href="/login"
+              className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold text-cyan-300 transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5"
+              style={{
+                background:
+                  'linear-gradient(135deg, rgba(6, 182, 212, 0.16) 0%, rgba(124, 58, 237, 0.22) 100%)',
+                border: '1px solid rgba(6, 182, 212, 0.45)',
+                boxShadow: '0 0 18px rgba(6, 182, 212, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
+              }}
+            >
+              <LogIn size={13} className="text-cyan-400" />
+              <span>Login</span>
+            </Link>
+          )}
 
           {/* Hamburger Menu Toggle Button */}
           <button
@@ -166,7 +200,7 @@ export default function MobileHeader({ genres = [] }: MobileHeaderProps) {
         </div>
       </div>
 
-      {/* ── Modern Floating Glassmorphism Mobile Menu ── */}
+      {/* ── Modern Floating Glassmorphism Mobile Menu (Clean without redundant login/riwayat in drawer) ── */}
       {menuOpen && (
         <div
           className="absolute top-full left-0 right-0 p-4 sm:p-5 rounded-b-3xl border-b border-x transition-all duration-300 animate-in fade-in slide-in-from-top-4"

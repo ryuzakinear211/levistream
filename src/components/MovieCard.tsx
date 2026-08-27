@@ -11,13 +11,14 @@ import { getMovieUrl, getTVUrl } from '@/lib/urls';
 interface MovieCardProps {
   item: Movie | TVShow;
   type?: 'movie' | 'tv';
+  priority?: boolean;
 }
 
 function isMovie(item: Movie | TVShow): item is Movie {
   return 'title' in item;
 }
 
-export default function MovieCard({ item, type = 'movie' }: MovieCardProps) {
+export default function MovieCard({ item, type = 'movie', priority = false }: MovieCardProps) {
   const [imgError, setImgError] = useState(false);
   const [isImgLoaded, setIsImgLoaded] = useState(false);
 
@@ -28,6 +29,8 @@ export default function MovieCard({ item, type = 'movie' }: MovieCardProps) {
   const href = type === 'tv' ? getTVUrl(item) : getMovieUrl(item);
 
   const imagePath = item.poster_path || item.backdrop_path;
+  // Use w342 for optimal bandwidth & instant rendering in 2-6 col grids
+  const posterUrl = getImageUrl(imagePath, 'w342');
 
   return (
     <Link
@@ -36,7 +39,7 @@ export default function MovieCard({ item, type = 'movie' }: MovieCardProps) {
     >
       {/* ── Poster Wrapper ── */}
       <div className="relative aspect-[2/3] w-full rounded-xl sm:rounded-2xl overflow-hidden bg-[#0c1224] border border-white/10 shadow-md group-hover:shadow-xl transition-all duration-300 transform group-hover:-translate-y-1.5">
-        {/* Skeleton placeholder while image loads */}
+        {/* Skeleton shimmer placeholder while image loads */}
         {!isImgLoaded && !imgError && (
           <div className="absolute inset-0 skeleton bg-white/[0.08] z-0" />
         )}
@@ -44,11 +47,12 @@ export default function MovieCard({ item, type = 'movie' }: MovieCardProps) {
         {/* Poster Image */}
         {imagePath && !imgError ? (
           <Image
-            src={getImageUrl(imagePath, 'w500')}
+            src={posterUrl}
             alt={title || 'Movie Poster'}
             fill
-            className={`object-cover transition-all duration-500 ease-out group-hover:scale-105 ${
-              isImgLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+            priority={priority}
+            className={`object-cover transition-all duration-300 ease-out group-hover:scale-105 ${
+              isImgLoaded ? 'opacity-100' : 'opacity-0'
             }`}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
             onLoad={() => setIsImgLoaded(true)}
