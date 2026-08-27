@@ -7,6 +7,7 @@ import { getMovieDetails, getImageUrl, searchMovies } from '@/lib/tmdb';
 import siteConfig, { FeaturedItem } from '@/config';
 import { cleanVideoUrl, getMovieUrl } from '@/lib/urls';
 import { getGitHubRawFile, listGitHubDir } from '@/lib/githubStorage';
+import { getMongoMovieBySlug, getMongoMovies } from '@/lib/mongodb/service';
 
 export interface CustomMovieFrontmatter {
   title?: string;
@@ -70,6 +71,15 @@ export function getAllCustomMovieFiles(): string[] {
 }
 
 export async function getAllCustomMovieFilesAsync(): Promise<string[]> {
+  try {
+    const mongoDocs = await getMongoMovies();
+    if (mongoDocs && mongoDocs.length > 0) {
+      const mongoFiles = mongoDocs.map((m) => `${m.slug}.md`);
+      const localFiles = getAllCustomMovieFiles();
+      return Array.from(new Set([...mongoFiles, ...localFiles]));
+    }
+  } catch {}
+
   const localFiles = getAllCustomMovieFiles();
   if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
     try {
@@ -121,21 +131,21 @@ export function getAllCustomMovieSlugs(): string[] {
           slugs.push(String(data.tmdb_id));
         }
         if (data.title) {
-          const tSlug = cleanSlug(data.title);
-          if (tSlug) {
-            slugs.push(tSlug);
-            if (data.tmdb_id) {
-              slugs.push(`${tSlug}-${data.tmdb_id}`);
-            }
-            const year = data.year || data.release_date?.slice(0, 4) || '2026';
+          const titleSlug = cleanSlug(data.title);
+          if (titleSlug) {
+            slugs.push(titleSlug);
+            const year = data.year || (data.release_date ? data.release_date.slice(0, 4) : undefined);
             if (year) {
-              slugs.push(`${tSlug}-${year}`);
+              slugs.push(`${titleSlug}-${year}`);
+            }
+            if (data.tmdb_id) {
+              slugs.push(`${titleSlug}-${data.tmdb_id}`);
             }
           }
         }
       }
-    } catch (e) {
-      console.error(`Error reading slugs for ${file}:`, e);
+    } catch (error) {
+      console.error(`Error reading ${file} for slugs:`, error);
     }
   });
 
@@ -161,7 +171,7 @@ export function getAllCustomMovieSlugs(): string[] {
 }
 
 /**
- * Returns a mapping of tmdb_id -> custom slug (e.g. { 1288445: 'movie.md' }).
+ * Gets a mapping of TMDB IDs to their custom markdown movie slugs.
  */
 export function getCustomMovieTmdbMapping(): Record<string, string> {
   const files = getAllCustomMovieFiles();
@@ -183,10 +193,59 @@ export function getCustomMovieTmdbMapping(): Record<string, string> {
   return mapping;
 }
 
+export function getCustomMovieSlugsByTmdbId(): Record<number, string> {
+  const files = getAllCustomMovieFiles();
+  const mapping: Record<number, string> = {};
+
+  files.forEach((file) => {
+    try {
+      const filePath = path.join(CONTENT_DIR, file);
+      const fileContent = fs.readFileSync(filePath, 'utf8');
+      const { data } = matter(fileContent);
+      if (data && data.tmdb_id) {
+        const baseSlug = file.replace(/\.(md|markdown)$/i, '');
+        mapping[Number(data.tmdb_id)] = baseSlug;
+      }
+    } catch (error) {
+      console.error(`Error reading ${file} for TMDB ID mapping:`, error);
+    }
+  });
+
+  return mapping;
+}
+
 /**
  * Finds and parses a custom markdown movie by its slug, title slug, title-year, trailing ID, or tmdb_id.
  */
 export async function getCustomMovieBySlug(slugOrId: string | number): Promise<CustomMovieData | null> {
+  // 1. Check MongoDB first (Persistent Cloud Source of Truth)
+  try {
+    const mongoDoc = await getMongoMovieBySlug(slugOrId);
+    if (mongoDoc) {
+      const frontmatter: CustomMovieFrontmatter = {
+        title: mongoDoc.title,
+        tmdb_id: mongoDoc.tmdb_id,
+        rating: mongoDoc.rating,
+        deskripsi: mongoDoc.deskripsi,
+        videourl: mongoDoc.videourl,
+        image_url: mongoDoc.image_url,
+        featured: mongoDoc.featured,
+        subtitles: mongoDoc.subtitles,
+        duration: mongoDoc.duration,
+      };
+      const contentHtml = mongoDoc.content ? (marked.parse(mongoDoc.content) as string) : '';
+      return {
+        slug: mongoDoc.slug,
+        filename: `${mongoDoc.slug}.md`,
+        frontmatter,
+        contentHtml,
+        rawContent: mongoDoc.content || '',
+      };
+    }
+  } catch (mErr) {
+    console.warn('[markdownMovies] MongoDB getCustomMovieBySlug notice:', mErr);
+  }
+
   ensureContentDirExists();
   const searchKey = String(slugOrId).trim().toLowerCase();
   const cleanKey = searchKey.replace(/\.(md|markdown)$/i, '');
