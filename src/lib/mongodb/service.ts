@@ -367,7 +367,7 @@ export async function getMongoMovies(): Promise<MongoMovie[]> {
             return [];
           }
         })(),
-        3500,
+        12000,
         []
       );
     },
@@ -426,7 +426,7 @@ export async function getMongoMovieBySlug(slugOrId: string | number): Promise<Mo
         return null;
       }
     })(),
-    3500,
+    12000,
     null
   );
 }
@@ -551,7 +551,7 @@ export async function getMongoContentCounts(): Promise<{
         return { totalMovies: 0, totalTVShows: 0, totalEpisodes: 0 };
       }
     })(),
-    4000,
+    12000,
     { totalMovies: 0, totalTVShows: 0, totalEpisodes: 0 }
   );
 }
@@ -578,7 +578,7 @@ export async function getMongoTVShows(): Promise<(MongoTVShow & { episodes: Mong
             return [];
           }
         })(),
-        3500,
+        12000,
         []
       );
     },
@@ -619,7 +619,7 @@ export async function getMongoTVShowBySlug(
     }
   }
 
-  // Direct database query fallback with 3.5s timeout
+  // Direct database query fallback with 12s timeout
   return withTimeout(
     (async () => {
       try {
@@ -646,7 +646,7 @@ export async function getMongoTVShowBySlug(
         return null;
       }
     })(),
-    3500,
+    12000,
     null
   );
 }
