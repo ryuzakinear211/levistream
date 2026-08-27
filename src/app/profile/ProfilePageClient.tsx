@@ -12,11 +12,11 @@ import {
   Trash2,
   Play,
   Film,
+  Tv,
   Star,
   Clock,
   ShieldCheck,
   Calendar,
-  ArrowRight,
   RefreshCw,
   ChevronLeft,
   ChevronRight,
@@ -158,9 +158,9 @@ export default function ProfilePageClient() {
           <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start justify-between gap-6">
             
             {/* Left: Avatar + Details */}
-            <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-5">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-5 w-full md:w-auto">
               {/* Avatar Frame */}
-              <div className="relative group">
+              <div className="relative group flex-shrink-0">
                 <div
                   className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl p-1 flex items-center justify-center shadow-2xl transition-transform duration-300 group-hover:scale-105"
                   style={{
@@ -194,38 +194,44 @@ export default function ProfilePageClient() {
               </div>
 
               {/* User Info Details */}
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
-                  <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight">
-                    {isLoggedIn ? user?.username : 'Guest'}
-                  </h1>
+              <div className="space-y-2 flex-1 min-w-0">
+                {!isLoggedIn ? (
+                  // GUEST MODE: No text heading, full badge only + informative text
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-center sm:justify-start">
+                      <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-extrabold bg-slate-500/20 border border-slate-500/35 text-slate-200 shadow-sm">
+                        <User size={14} className="text-slate-400" />
+                        <span>GUEST ACCOUNT</span>
+                      </span>
+                    </div>
 
-                  {/* Status Badge */}
-                  {isLoggedIn ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)]">
-                      <ShieldCheck size={12} className="text-cyan-400" />
-                      MEMBER
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-500/20 border border-slate-500/30 text-slate-300">
-                      Guest
-                    </span>
-                  )}
-                </div>
+                    <p className="text-xs sm:text-sm text-slate-400">
+                      Login untuk melihat riwayat tontonan & watchlist
+                    </p>
+                  </div>
+                ) : (
+                  // LOGGED IN MODE: Responsive username + Member Badge + Email + Joined Date
+                  <div className="space-y-2">
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-1.5 sm:gap-2.5">
+                      <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight break-all sm:break-normal max-w-full">
+                        {user?.username}
+                      </h1>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)] flex-shrink-0 mt-0.5 sm:mt-1">
+                        <ShieldCheck size={12} className="text-cyan-400" />
+                        MEMBER
+                      </span>
+                    </div>
 
-                <p className="text-xs sm:text-sm text-slate-400">
-                  {isLoggedIn
-                    ? user?.email
-                    : 'Login untuk melihat riwayat tontonan & watchlist'}
-                </p>
+                    <p className="text-xs sm:text-sm text-slate-400 truncate">
+                      {user?.email}
+                    </p>
 
-                {/* Meta details */}
-                {isLoggedIn && (
-                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 pt-1 text-xs text-slate-400">
-                    <span className="inline-flex items-center gap-1.5">
-                      <Calendar size={13} className="text-purple-400" />
-                      Bergabung: {formatJoinDate(user?.createdAt)}
-                    </span>
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 pt-1 text-xs text-slate-400">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Calendar size={13} className="text-purple-400" />
+                        Bergabung: {formatJoinDate(user?.createdAt)}
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -451,7 +457,7 @@ export default function ProfilePageClient() {
                 </Link>
               </div>
             ) : (
-              /* Watchlist Grid & Pagination */
+              /* Watchlist Grid Consistent with Homepage MovieCard */
               <>
                 <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3.5 sm:gap-4.5 md:gap-5">
                   {paginatedWatchlist.map((item) => {
@@ -461,78 +467,78 @@ export default function ProfilePageClient() {
                         ? item.posterPath
                         : getImageUrl(item.posterPath, 'w500')
                       : '/placeholder-poster.svg';
+                    const rating = typeof item.rating === 'number' && item.rating > 0 ? Math.round(item.rating * 10) / 10 : null;
+                    const year = item.releaseDate ? item.releaseDate.slice(0, 4) : '2026';
 
                     return (
                       <div
                         key={String(item.contentId)}
-                        className="group relative flex flex-col rounded-2xl overflow-hidden bg-[#0c1226] border border-white/[0.08] hover:border-cyan-500/50 transition-all duration-300 hover:shadow-[0_8px_30px_rgba(6,182,212,0.2)] hover:-translate-y-1"
+                        className="group block w-full select-none"
                       >
-                        {/* Poster Container */}
-                        <Link href={targetUrl} className="relative aspect-[2/3] w-full overflow-hidden bg-slate-900 block">
-                          <Image
-                            src={posterSrc}
-                            alt={item.title}
-                            fill
-                            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
-                            className="object-cover transition-transform duration-500 group-hover:scale-105"
-                          />
+                        {/* ── Poster Wrapper (Exact styling matching MovieCard) ── */}
+                        <div className="relative aspect-[2/3] w-full rounded-xl sm:rounded-2xl overflow-hidden bg-[#0c1224] border border-white/10 shadow-md group-hover:shadow-xl transition-all duration-300 transform group-hover:-translate-y-1.5">
+                          <Link href={targetUrl} className="block w-full h-full relative">
+                            <Image
+                              src={posterSrc}
+                              alt={item.title}
+                              fill
+                              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                              className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+                            />
 
-                          {/* Top Badges */}
-                          <div className="absolute top-2 left-2 flex items-center gap-1.5">
-                            <span
-                              className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider text-white shadow-md ${
-                                item.type === 'tv'
-                                  ? 'bg-gradient-to-r from-pink-600 to-purple-600'
-                                  : 'bg-gradient-to-r from-cyan-600 to-blue-600'
-                              }`}
-                            >
-                              {item.type === 'tv' ? 'Series' : 'Movie'}
-                            </span>
-                          </div>
-
-                          {/* Rating Badge */}
-                          {Boolean(item.rating) && item.rating! > 0 && (
-                            <div className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-black/70 backdrop-blur-md border border-amber-500/30 text-amber-300 text-[10px] font-black">
-                              <Star size={10} className="fill-amber-400 text-amber-400" />
-                              <span>{item.rating?.toFixed(1)}</span>
+                            {/* ── IMDb-Style Yellow Rating Badge (Top-Right) ── */}
+                            <div className="absolute top-2 right-2 z-10 flex items-center gap-1 px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded-md bg-[#f5c518] text-black font-black text-[10px] sm:text-[11.5px] shadow-lg shadow-black/50 tracking-tight">
+                              <Star size={11} fill="currentColor" stroke="none" className="text-black" />
+                              <span>{rating ? rating.toFixed(1) : 'NR'}</span>
                             </div>
-                          )}
 
-                          {/* Hover Overlay with Play Icon */}
-                          <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                            <div className="w-11 h-11 rounded-full bg-cyan-500 text-slate-950 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.8)] transform scale-75 group-hover:scale-100 transition-transform duration-300">
-                              <Play size={18} className="fill-current ml-0.5" />
+                            {/* ── Media Type Badge (Top-Left: Series / Movie) ── */}
+                            <div className="absolute top-2 left-2 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/75 backdrop-blur-md border border-white/15 text-slate-200 font-bold text-[9px] sm:text-[10px] uppercase tracking-wider shadow-md">
+                              {item.type === 'tv' ? (
+                                <>
+                                  <Tv size={10} className="text-cyan-400" />
+                                  <span>Series</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Film size={10} className="text-cyan-400" />
+                                  <span>Movie</span>
+                                </>
+                              )}
                             </div>
-                          </div>
-                        </Link>
 
-                        {/* Info & Remove Button */}
-                        <div className="p-3 flex flex-col justify-between flex-1 gap-2">
-                          <Link href={targetUrl} className="block">
-                            <h4 className="text-xs sm:text-sm font-bold text-white line-clamp-1 group-hover:text-cyan-400 transition-colors">
-                              {item.title}
-                            </h4>
-                            <p className="text-[10px] text-slate-400">
-                              {item.releaseDate ? item.releaseDate.slice(0, 4) : '2026'}
-                            </p>
+                            {/* Hover Play Overlay */}
+                            <div className="absolute inset-0 bg-slate-950/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
+                              <div className="w-10 h-10 rounded-full bg-cyan-500 text-slate-950 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.8)] transform scale-75 group-hover:scale-100 transition-transform duration-300">
+                                <Play size={16} className="fill-current ml-0.5" />
+                              </div>
+                            </div>
                           </Link>
+                        </div>
 
-                          <div className="flex items-center justify-between pt-1 border-t border-white/[0.06]">
-                            <Link
-                              href={targetUrl}
-                              className="text-[11px] font-bold text-cyan-400 hover:underline flex items-center gap-1"
-                            >
-                              <span>Tonton</span>
-                              <ArrowRight size={11} />
+                        {/* ── Info Outside Below Poster (Matching MovieCard) ── */}
+                        <div className="pt-2 sm:pt-2.5 px-0.5 space-y-1">
+                          <div className="flex items-start justify-between gap-1.5">
+                            <Link href={targetUrl} className="flex-1 min-w-0 block">
+                              <h3
+                                title={item.title}
+                                className="font-bold text-white text-xs sm:text-[13.5px] leading-snug line-clamp-2 group-hover:text-cyan-400 transition-colors"
+                              >
+                                {item.title}
+                              </h3>
                             </Link>
 
                             <button
                               onClick={() => removeFromWatchlist(item.contentId)}
-                              className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                              className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors flex-shrink-0"
                               title="Hapus dari Watchlist"
                             >
                               <Trash2 size={13} />
                             </button>
+                          </div>
+
+                          <div className="flex items-center text-[11px] sm:text-xs text-slate-400 font-medium">
+                            <span>{year}</span>
                           </div>
                         </div>
                       </div>
@@ -562,7 +568,6 @@ export default function ProfilePageClient() {
                         {Array.from({ length: totalWatchlistPages }).map((_, idx) => {
                           const p = idx + 1;
                           const isActive = p === watchlistPage;
-                          // Display smart range
                           if (
                             p === 1 ||
                             p === totalWatchlistPages ||
