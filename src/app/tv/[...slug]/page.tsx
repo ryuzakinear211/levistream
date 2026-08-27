@@ -16,8 +16,8 @@ import TVDetailClient, { TVDetailHeaderActions } from '@/components/TVDetailClie
 import TVEpisodeList from '@/components/TVEpisodeList';
 import siteConfig from '@/config';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export const dynamicParams = true;
+export const revalidate = 3600;
 
 interface PageProps {
   params: {
@@ -223,8 +223,8 @@ export default async function TVShowPage({ params }: PageProps) {
         thumbnailUrl: [thumbnailImage],
         uploadDate: uploadDate,
         duration: durationIso,
-        contentUrl: pageUrl,
-        embedUrl: embedUrl,
+        contentUrl: videoUrl,
+        embedUrl: videoUrl,
         publisher: {
           '@type': 'Organization',
           name: siteConfig.name,
@@ -518,4 +518,11 @@ export default async function TVShowPage({ params }: PageProps) {
       )}
     </div>
   );
+}
+
+/**
+ * Pre-generates static params for all custom TV shows, seasons, and episodes
+ */
+export async function generateStaticParams() {
+  return await getAllCustomTVSlugPaths();
 }

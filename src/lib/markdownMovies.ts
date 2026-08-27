@@ -7,6 +7,7 @@ import { getMovieDetails, getImageUrl, searchMovies } from '@/lib/tmdb';
 import siteConfig, { FeaturedItem } from '@/config';
 import { cleanVideoUrl, getMovieUrl } from '@/lib/urls';
 import { getMongoMovieBySlug, getMongoMovies } from '@/lib/mongodb/service';
+import { memoryCache } from '@/lib/cache';
 
 export interface CustomMovieFrontmatter {
   title?: string;
@@ -358,7 +359,11 @@ export async function getCustomMovieBySlug(slugOrId: string | number): Promise<C
 export async function getMovieDetailsWithCustomOverride(
   slugOrId: string | number
 ): Promise<MergedMovieDetail | null> {
-  let customMovie = await getCustomMovieBySlug(slugOrId);
+  const cacheKey = `movie_detail_override_${String(slugOrId).trim().toLowerCase()}`;
+  return memoryCache.getOrFetch<MergedMovieDetail | null>(
+    cacheKey,
+    async () => {
+      let customMovie = await getCustomMovieBySlug(slugOrId);
 
   let tmdbId: number | null = null;
 
@@ -512,9 +517,13 @@ export async function getMovieDetailsWithCustomOverride(
     customSlug: customMovie.slug,
     customVideoUrl: videoUrl,
     customImageUrl: imageUrl,
-    customSubtitles: subtitles,
-    customContentHtml: contentHtml && contentHtml.trim().length > 0 ? contentHtml : null,
-  };
+        customSubtitles: subtitles,
+        customContentHtml: contentHtml && contentHtml.trim().length > 0 ? contentHtml : null,
+      };
+    },
+    60_000,
+    15_000
+  );
 }
 
 /**

@@ -7,6 +7,7 @@ import { getTVShowDetails, getImageUrl, searchTVShows } from '@/lib/tmdb';
 import { FeaturedItem } from '@/config';
 import { cleanVideoUrl, getTVUrl } from '@/lib/urls';
 import { getMongoTVShowBySlug, getMongoTVShows } from '@/lib/mongodb/service';
+import { memoryCache } from '@/lib/cache';
 
 export interface CustomTVFrontmatter {
   title?: string;
@@ -614,9 +615,12 @@ export async function getTVShowDetailsWithCustomOverride(
   slugArray: string[]
 ): Promise<MergedTVShowDetail | null> {
   if (!slugArray || slugArray.length === 0) return null;
-
-  const showSlugOrId = slugArray[0];
-  let customTV = await getCustomTVShowBySlug(showSlugOrId);
+  const cacheKey = `tv_detail_override_${slugArray.join('/').toLowerCase()}`;
+  return memoryCache.getOrFetch<MergedTVShowDetail | null>(
+    cacheKey,
+    async () => {
+      const showSlugOrId = slugArray[0];
+      let customTV = await getCustomTVShowBySlug(showSlugOrId);
 
   let tmdbId: number | null = null;
 
@@ -732,10 +736,14 @@ export async function getTVShowDetailsWithCustomOverride(
     customImageUrl,
     customContentHtml: contentHtml,
     hasSeasons,
-    seasonsList: seasons,
-          allEpisodes,
-    activeEpisode,
-  } as any;
+        seasonsList: seasons,
+        allEpisodes,
+        activeEpisode,
+      } as any;
+    },
+    60_000,
+    15_000
+  );
 }
 
 /**

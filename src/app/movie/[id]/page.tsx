@@ -16,8 +16,8 @@ import MovieDetailClient from '@/components/MovieDetailClient';
 import VideoPlayer from '@/components/VideoPlayer';
 import siteConfig from '@/config';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export const dynamicParams = true;
+export const revalidate = 3600;
 
 interface PageProps {
   params: {
@@ -213,8 +213,8 @@ export default async function MovieDetailPage({ params }: PageProps) {
         thumbnailUrl: [thumbnailImage],
         uploadDate: uploadDate,
         duration: durationIso,
-        contentUrl: pageUrl,
-        embedUrl: embedUrl,
+        contentUrl: videoUrl,
+        embedUrl: videoUrl,
         publisher: {
           '@type': 'Organization',
           name: siteConfig.name,
@@ -531,4 +531,14 @@ export default async function MovieDetailPage({ params }: PageProps) {
       )}
     </div>
   );
+}
+
+/**
+ * Pre-generates static params for all custom markdown movies in video/
+ */
+export async function generateStaticParams() {
+  const customMovieSlugs = getAllCustomMovieSlugs();
+  return customMovieSlugs.map((slug) => ({
+    id: slug,
+  }));
 }
