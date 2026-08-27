@@ -13,6 +13,6 @@ deskripsi: >-
   lalunya!
 image_url: 'https://image.tmdb.org/t/p/w1280/Vcp2tLZl7ge14Q06UzGk5TOgqy.jpg'
 rating: 7.9
-featured: false
+featured: true
 ---
 
