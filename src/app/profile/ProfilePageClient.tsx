@@ -20,6 +20,8 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import ProfileSkeleton from '@/components/skeletons/ProfileSkeleton';
@@ -58,6 +60,106 @@ function formatJoinDate(dateVal?: string | number): string {
 
 const WATCHLIST_PER_PAGE = 12;
 const HISTORY_PER_PAGE = 10;
+
+function WatchlistCardItem({
+  item,
+  onRemove,
+}: {
+  item: any;
+  onRemove: (id: string | number) => void;
+}) {
+  const [isImgLoaded, setIsImgLoaded] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
+  const targetUrl = item.urlPath || (item.type === 'tv' ? `/tv/${item.contentId}` : `/movie/${item.contentId}`);
+  const posterSrc = item.posterPath
+    ? item.posterPath.startsWith('http')
+      ? item.posterPath
+      : getImageUrl(item.posterPath, 'w500')
+    : '/placeholder-poster.svg';
+  const rating = typeof item.rating === 'number' && item.rating > 0 ? Math.round(item.rating * 10) / 10 : null;
+  const year = item.releaseDate ? item.releaseDate.slice(0, 4) : '2026';
+
+  return (
+    <div className="group block w-full select-none">
+      {/* ── Poster Wrapper (Exact styling matching MovieCard) ── */}
+      <div className="relative aspect-[2/3] w-full rounded-xl sm:rounded-2xl overflow-hidden bg-[#0c1224] border border-white/10 shadow-md group-hover:shadow-xl transition-all duration-300 transform group-hover:-translate-y-1.5">
+        <Link href={targetUrl} className="block w-full h-full relative">
+          {/* Skeleton Shimmer while image loads */}
+          {!isImgLoaded && !imgError && (
+            <div className="absolute inset-0 skeleton bg-white/[0.08] z-0" />
+          )}
+
+          <Image
+            src={posterSrc}
+            alt={item.title}
+            fill
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+            className={`object-cover transition-all duration-500 ease-out group-hover:scale-105 ${
+              isImgLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+            }`}
+            onLoad={() => setIsImgLoaded(true)}
+            onError={() => setImgError(true)}
+          />
+
+          {/* ── IMDb-Style Yellow Rating Badge (Top-Right) ── */}
+          <div className="absolute top-2 right-2 z-10 flex items-center gap-1 px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded-md bg-[#f5c518] text-black font-black text-[10px] sm:text-[11.5px] shadow-lg shadow-black/50 tracking-tight">
+            <Star size={11} fill="currentColor" stroke="none" className="text-black" />
+            <span>{rating ? rating.toFixed(1) : 'NR'}</span>
+          </div>
+
+          {/* ── Media Type Badge (Top-Left: Series / Movie) ── */}
+          <div className="absolute top-2 left-2 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/75 backdrop-blur-md border border-white/15 text-slate-200 font-bold text-[9px] sm:text-[10px] uppercase tracking-wider shadow-md">
+            {item.type === 'tv' ? (
+              <>
+                <Tv size={10} className="text-cyan-400" />
+                <span>Series</span>
+              </>
+            ) : (
+              <>
+                <Film size={10} className="text-cyan-400" />
+                <span>Movie</span>
+              </>
+            )}
+          </div>
+
+          {/* Hover Play Overlay */}
+          <div className="absolute inset-0 bg-slate-950/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
+            <div className="w-10 h-10 rounded-full bg-cyan-500 text-slate-950 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.8)] transform scale-75 group-hover:scale-100 transition-transform duration-300">
+              <Play size={16} className="fill-current ml-0.5" />
+            </div>
+          </div>
+        </Link>
+      </div>
+
+      {/* ── Info Outside Below Poster (Matching MovieCard) ── */}
+      <div className="pt-2 sm:pt-2.5 px-0.5 space-y-1">
+        <div className="flex items-start justify-between gap-1.5">
+          <Link href={targetUrl} className="flex-1 min-w-0 block">
+            <h3
+              title={item.title}
+              className="font-bold text-white text-xs sm:text-[13.5px] leading-snug line-clamp-2 group-hover:text-cyan-400 transition-colors"
+            >
+              {item.title}
+            </h3>
+          </Link>
+
+          <button
+            onClick={() => onRemove(item.contentId)}
+            className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors flex-shrink-0"
+            title="Hapus dari Watchlist"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+
+        <div className="flex items-center text-[11px] sm:text-xs text-slate-400 font-medium">
+          <span>{year}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ProfilePageClient() {
   const {
@@ -196,7 +298,7 @@ export default function ProfilePageClient() {
               {/* User Info Details */}
               <div className="space-y-2 flex-1 min-w-0">
                 {!isLoggedIn ? (
-                  // GUEST MODE: No text heading, full badge only + informative text
+                  // GUEST MODE: Full prominent badge without redundant text heading
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-center sm:justify-start">
                       <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-extrabold bg-slate-500/20 border border-slate-500/35 text-slate-200 shadow-sm">
@@ -355,34 +457,16 @@ export default function ProfilePageClient() {
             </button>
           </div>
 
-          {/* Right Action: Clear History (only on history tab when logged in and has items) */}
+          {/* Right Action: Clear History Trigger Button */}
           {activeTab === 'history' && isLoggedIn && history.length > 0 && (
-            <div>
-              {confirmClearHistory ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleClearAllHistory}
-                    className="px-3 py-1.5 rounded-xl bg-rose-500 text-white font-bold text-xs shadow-lg hover:bg-rose-600 transition-colors"
-                  >
-                    Ya, Bersihkan
-                  </button>
-                  <button
-                    onClick={() => setConfirmClearHistory(false)}
-                    className="px-2.5 py-1.5 rounded-xl bg-white/10 text-slate-300 text-xs hover:text-white transition-colors"
-                  >
-                    Batal
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setConfirmClearHistory(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 transition-colors"
-                >
-                  <Trash2 size={13} />
-                  <span className="hidden sm:inline">Bersihkan Riwayat</span>
-                </button>
-              )}
-            </div>
+            <button
+              onClick={() => setConfirmClearHistory(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 transition-colors flex-shrink-0"
+              title="Bersihkan Semua Riwayat"
+            >
+              <Trash2 size={13} />
+              <span className="hidden sm:inline">Bersihkan Riwayat</span>
+            </button>
           )}
         </div>
 
@@ -460,90 +544,13 @@ export default function ProfilePageClient() {
               /* Watchlist Grid Consistent with Homepage MovieCard */
               <>
                 <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3.5 sm:gap-4.5 md:gap-5">
-                  {paginatedWatchlist.map((item) => {
-                    const targetUrl = item.urlPath || (item.type === 'tv' ? `/tv/${item.contentId}` : `/movie/${item.contentId}`);
-                    const posterSrc = item.posterPath
-                      ? item.posterPath.startsWith('http')
-                        ? item.posterPath
-                        : getImageUrl(item.posterPath, 'w500')
-                      : '/placeholder-poster.svg';
-                    const rating = typeof item.rating === 'number' && item.rating > 0 ? Math.round(item.rating * 10) / 10 : null;
-                    const year = item.releaseDate ? item.releaseDate.slice(0, 4) : '2026';
-
-                    return (
-                      <div
-                        key={String(item.contentId)}
-                        className="group block w-full select-none"
-                      >
-                        {/* ── Poster Wrapper (Exact styling matching MovieCard) ── */}
-                        <div className="relative aspect-[2/3] w-full rounded-xl sm:rounded-2xl overflow-hidden bg-[#0c1224] border border-white/10 shadow-md group-hover:shadow-xl transition-all duration-300 transform group-hover:-translate-y-1.5">
-                          <Link href={targetUrl} className="block w-full h-full relative">
-                            <Image
-                              src={posterSrc}
-                              alt={item.title}
-                              fill
-                              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-                              className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
-                            />
-
-                            {/* ── IMDb-Style Yellow Rating Badge (Top-Right) ── */}
-                            <div className="absolute top-2 right-2 z-10 flex items-center gap-1 px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded-md bg-[#f5c518] text-black font-black text-[10px] sm:text-[11.5px] shadow-lg shadow-black/50 tracking-tight">
-                              <Star size={11} fill="currentColor" stroke="none" className="text-black" />
-                              <span>{rating ? rating.toFixed(1) : 'NR'}</span>
-                            </div>
-
-                            {/* ── Media Type Badge (Top-Left: Series / Movie) ── */}
-                            <div className="absolute top-2 left-2 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/75 backdrop-blur-md border border-white/15 text-slate-200 font-bold text-[9px] sm:text-[10px] uppercase tracking-wider shadow-md">
-                              {item.type === 'tv' ? (
-                                <>
-                                  <Tv size={10} className="text-cyan-400" />
-                                  <span>Series</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Film size={10} className="text-cyan-400" />
-                                  <span>Movie</span>
-                                </>
-                              )}
-                            </div>
-
-                            {/* Hover Play Overlay */}
-                            <div className="absolute inset-0 bg-slate-950/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
-                              <div className="w-10 h-10 rounded-full bg-cyan-500 text-slate-950 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.8)] transform scale-75 group-hover:scale-100 transition-transform duration-300">
-                                <Play size={16} className="fill-current ml-0.5" />
-                              </div>
-                            </div>
-                          </Link>
-                        </div>
-
-                        {/* ── Info Outside Below Poster (Matching MovieCard) ── */}
-                        <div className="pt-2 sm:pt-2.5 px-0.5 space-y-1">
-                          <div className="flex items-start justify-between gap-1.5">
-                            <Link href={targetUrl} className="flex-1 min-w-0 block">
-                              <h3
-                                title={item.title}
-                                className="font-bold text-white text-xs sm:text-[13.5px] leading-snug line-clamp-2 group-hover:text-cyan-400 transition-colors"
-                              >
-                                {item.title}
-                              </h3>
-                            </Link>
-
-                            <button
-                              onClick={() => removeFromWatchlist(item.contentId)}
-                              className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors flex-shrink-0"
-                              title="Hapus dari Watchlist"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-
-                          <div className="flex items-center text-[11px] sm:text-xs text-slate-400 font-medium">
-                            <span>{year}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {paginatedWatchlist.map((item) => (
+                    <WatchlistCardItem
+                      key={String(item.contentId)}
+                      item={item}
+                      onRemove={removeFromWatchlist}
+                    />
+                  ))}
                 </div>
 
                 {/* Watchlist Pagination Controls */}
@@ -831,6 +838,62 @@ export default function ProfilePageClient() {
                 )}
               </>
             )}
+          </div>
+        )}
+
+        {/* ── 4. DEDICATED RESPONSIVE CLEAR ALL HISTORY MODAL ── */}
+        {confirmClearHistory && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+            <div
+              className="relative w-full max-w-sm rounded-3xl p-6 sm:p-7 text-center space-y-5 shadow-2xl border"
+              style={{
+                background: 'rgba(11, 16, 32, 0.98)',
+                borderColor: 'rgba(244, 63, 94, 0.35)',
+                boxShadow: '0 25px 60px rgba(0, 0, 0, 0.9), 0 0 35px rgba(244, 63, 94, 0.25)',
+              }}
+            >
+              {/* Close Button Top Right */}
+              <button
+                onClick={() => setConfirmClearHistory(false)}
+                className="absolute top-4 right-4 p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                aria-label="Tutup"
+              >
+                <X size={16} />
+              </button>
+
+              {/* Warning Icon Badge */}
+              <div className="w-14 h-14 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center mx-auto text-rose-400 shadow-[0_0_20px_rgba(244,63,94,0.25)]">
+                <Trash2 size={26} />
+              </div>
+
+              {/* Text Information */}
+              <div className="space-y-2">
+                <h3 className="text-lg font-black text-white tracking-tight">
+                  Hapus Semua Riwayat?
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-400 leading-relaxed px-1">
+                  Seluruh daftar riwayat tontonan Anda akan dibersihkan secara permanen. Tindakan ini tidak dapat dibatalkan.
+                </p>
+              </div>
+
+              {/* Action Buttons: 100% visible & comfortable on all screen sizes */}
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmClearHistory(false)}
+                  className="flex-1 py-3 rounded-2xl font-bold text-xs sm:text-sm text-slate-200 hover:text-white bg-white/[0.08] hover:bg-white/[0.15] border border-white/10 transition-all active:scale-95"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearAllHistory}
+                  className="flex-1 py-3 rounded-2xl font-bold text-xs sm:text-sm text-white bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 shadow-lg shadow-rose-600/40 transition-all active:scale-95"
+                >
+                  Ya, Hapus Semua
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

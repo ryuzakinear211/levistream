@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Play, Star, Tv, Film } from 'lucide-react';
+import { Star, Tv, Film } from 'lucide-react';
 import { Movie, TVShow } from '@/types/tmdb';
 import { getImageUrl } from '@/lib/tmdb';
 import { getMovieUrl, getTVUrl } from '@/lib/urls';
@@ -19,6 +19,7 @@ function isMovie(item: Movie | TVShow): item is Movie {
 
 export default function MovieCard({ item, type = 'movie' }: MovieCardProps) {
   const [imgError, setImgError] = useState(false);
+  const [isImgLoaded, setIsImgLoaded] = useState(false);
 
   const title = isMovie(item) ? item.title : item.name;
   const date = isMovie(item) ? item.release_date : item.first_air_date;
@@ -35,14 +36,22 @@ export default function MovieCard({ item, type = 'movie' }: MovieCardProps) {
     >
       {/* ── Poster Wrapper ── */}
       <div className="relative aspect-[2/3] w-full rounded-xl sm:rounded-2xl overflow-hidden bg-[#0c1224] border border-white/10 shadow-md group-hover:shadow-xl transition-all duration-300 transform group-hover:-translate-y-1.5">
+        {/* Skeleton placeholder while image loads */}
+        {!isImgLoaded && !imgError && (
+          <div className="absolute inset-0 skeleton bg-white/[0.08] z-0" />
+        )}
+
         {/* Poster Image */}
         {imagePath && !imgError ? (
           <Image
             src={getImageUrl(imagePath, 'w500')}
             alt={title || 'Movie Poster'}
             fill
-            className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+            className={`object-cover transition-all duration-500 ease-out group-hover:scale-105 ${
+              isImgLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+            }`}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+            onLoad={() => setIsImgLoaded(true)}
             onError={() => setImgError(true)}
           />
         ) : (
@@ -78,7 +87,7 @@ export default function MovieCard({ item, type = 'movie' }: MovieCardProps) {
       <div className="pt-2 sm:pt-2.5 px-0.5 space-y-1">
         <h3
           title={title}
-          className="font-bold text-white text-xs sm:text-[13.5px] leading-snug line-clamp-2"
+          className="font-bold text-white text-xs sm:text-[13.5px] leading-snug line-clamp-2 group-hover:text-cyan-400 transition-colors"
         >
           {title}
         </h3>
@@ -92,11 +101,14 @@ export default function MovieCard({ item, type = 'movie' }: MovieCardProps) {
 
 export function MovieCardSkeleton() {
   return (
-    <div className="w-full space-y-2">
-      <div className="aspect-[2/3] w-full rounded-xl sm:rounded-2xl overflow-hidden skeleton border border-white/5" />
-      <div className="space-y-1 px-0.5">
-        <div className="h-3.5 w-3/4 rounded skeleton" />
-        <div className="h-3 w-1/2 rounded skeleton" />
+    <div className="w-full space-y-2 select-none animate-pulse">
+      <div className="aspect-[2/3] w-full rounded-xl sm:rounded-2xl overflow-hidden skeleton bg-white/[0.08] border border-white/5 relative">
+        <div className="absolute top-2 left-2 w-12 h-4 rounded-md bg-white/[0.06] skeleton" />
+        <div className="absolute top-2 right-2 w-8 h-4 rounded-md bg-white/[0.06] skeleton" />
+      </div>
+      <div className="space-y-1.5 px-0.5 pt-1">
+        <div className="h-3.5 w-3/4 rounded-md bg-white/[0.08] skeleton" />
+        <div className="h-2.5 w-1/3 rounded-md bg-white/[0.05] skeleton" />
       </div>
     </div>
   );
