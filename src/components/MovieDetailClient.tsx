@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Bookmark, Film } from 'lucide-react';
 import TrailerModal from '@/components/TrailerModal';
 import ShareButton from '@/components/ShareButton';
@@ -26,10 +26,12 @@ export default function MovieDetailClient({
 
   const itemId = movieId || movieTitle;
   const isSaved = isInWatchlist(itemId);
+  const hasRecordedRef = useRef(false);
 
-  // Automatically record view to user history if logged in
+  // Automatically record view to user history once if logged in
   useEffect(() => {
-    if (itemId) {
+    if (itemId && !hasRecordedRef.current) {
+      hasRecordedRef.current = true;
       addToHistory({
         contentId: itemId,
         title: movieTitle,

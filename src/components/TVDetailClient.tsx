@@ -131,20 +131,25 @@ export default function TVDetailClient({
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const lastRecordedKeyRef = useRef<string>('');
 
-  // Automatically record view to user history if logged in
+  // Automatically record view to user history once per episode if logged in
   useEffect(() => {
     if (showTitle) {
-      const epLabel = activeEpisode?.episodeLabel
-        ? `${activeEpisode.episodeLabel} - ${activeEpisode.title || 'Episode'}`
-        : activeEpisode?.title;
-      addToHistory({
-        contentId: showTitle,
-        title: showTitle,
-        episodeTitle: epLabel,
-        posterPath: defaultBackdrop || null,
-        type: 'tv',
-      });
+      const epKey = `${showTitle}_${activeEpisode?.slug || 'main'}`;
+      if (lastRecordedKeyRef.current !== epKey) {
+        lastRecordedKeyRef.current = epKey;
+        const epLabel = activeEpisode?.episodeLabel
+          ? `${activeEpisode.episodeLabel} - ${activeEpisode.title || 'Episode'}`
+          : activeEpisode?.title;
+        addToHistory({
+          contentId: showTitle,
+          title: showTitle,
+          episodeTitle: epLabel,
+          posterPath: defaultBackdrop || null,
+          type: 'tv',
+        });
+      }
     }
   }, [showTitle, activeEpisode?.slug, defaultBackdrop, addToHistory]);
 

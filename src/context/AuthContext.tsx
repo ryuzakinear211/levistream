@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
 export interface UserProfile {
   id: string;
@@ -94,6 +94,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authModalMessage, setAuthModalMessage] = useState<string | undefined>(undefined);
 
   const isInitializedRef = useRef(false);
+  const userRef = useRef<UserProfile | null>(null);
+  const authStatusRef = useRef<AuthStatus>('initializing');
+  const recentHistoryRecordedRef = useRef<Map<string, number>>(new Map());
+
+  // Keep refs in sync with state for zero-dependency callbacks
+  useEffect(() => {
+    userRef.current = user;
+    authStatusRef.current = authStatus;
+  }, [user, authStatus]);
 
   // 1. Instant Synchronous Cache Hydration on Mount (0ms delay to eliminate flicker)
   useEffect(() => {
@@ -106,7 +115,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const parsedUser = JSON.parse(cachedUserRaw);
         if (parsedUser && parsedUser.id && parsedUser.username) {
           setUser(parsedUser);
+          userRef.current = parsedUser;
           setAuthStatus('authenticated');
+          authStatusRef.current = 'authenticated';
         }
       }
 
@@ -130,7 +141,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (!res.ok) {
-        // If 5xx or server error, retain cached user without kicking them out
         if (res.status !== 401 && res.status !== 403) {
           console.warn('[AuthContext] Server returned status', res.status);
           return;
@@ -151,9 +161,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const freshHistory: HistoryItem[] = data.user.history || [];
 
         setUser(freshUser);
+        userRef.current = freshUser;
         setWatchlist(freshWatchlist);
         setHistory(freshHistory);
         setAuthStatus('authenticated');
+        authStatusRef.current = 'authenticated';
 
         try {
           localStorage.setItem(LOCAL_USER_CACHE_KEY, JSON.stringify(freshUser));
@@ -161,11 +173,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           localStorage.setItem(LOCAL_HISTORY_CACHE_KEY, JSON.stringify(freshHistory));
         } catch {}
       } else if (data.success && data.authenticated === false) {
-        // Server definitively says there is no valid session
         setUser(null);
+        userRef.current = null;
         setWatchlist([]);
         setHistory([]);
         setAuthStatus('unauthenticated');
+        authStatusRef.current = 'unauthenticated';
 
         try {
           localStorage.removeItem(LOCAL_USER_CACHE_KEY);
@@ -174,7 +187,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch {}
       }
     } catch (err) {
-      // Network error or aborted fetch -> keep existing state to avoid false logouts
       console.warn('[AuthContext] sync session network error (retaining current state):', err);
     } finally {
       if (!isInitializedRef.current) {
@@ -188,7 +200,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshProfile();
   }, [refreshProfile]);
 
-  const login = async (identifier: string, password: string) => {
+  const login = useCallback(async (identifier: string, password: string) => {
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -208,9 +220,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const newHistory: HistoryItem[] = data.user.history || [];
 
         setUser(newUser);
+        userRef.current = newUser;
         setWatchlist(newWatchlist);
         setHistory(newHistory);
         setAuthStatus('authenticated');
+        authStatusRef.current = 'authenticated';
 
         try {
           localStorage.setItem(LOCAL_USER_CACHE_KEY, JSON.stringify(newUser));
@@ -225,9 +239,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err: any) {
       return { success: false, message: err.message || 'Terjadi kesalahan jaringan' };
     }
-  };
+  }, []);
 
-  const register = async (username: string, email: string, password: string) => {
+  const register = useCallback(async (username: string, email: string, password: string) => {
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
@@ -247,9 +261,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const newHistory: HistoryItem[] = data.user.history || [];
 
         setUser(newUser);
+        userRef.current = newUser;
         setWatchlist(newWatchlist);
         setHistory(newHistory);
         setAuthStatus('authenticated');
+        authStatusRef.current = 'authenticated';
 
         try {
           localStorage.setItem(LOCAL_USER_CACHE_KEY, JSON.stringify(newUser));
@@ -264,40 +280,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err: any) {
       return { success: false, message: err.message || 'Terjadi kesalahan jaringan' };
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
     } catch {}
     setUser(null);
+    userRef.current = null;
     setWatchlist([]);
     setHistory([]);
     setAuthStatus('unauthenticated');
+    authStatusRef.current = 'unauthenticated';
     try {
       localStorage.removeItem(LOCAL_USER_CACHE_KEY);
       localStorage.removeItem(LOCAL_WATCHLIST_CACHE_KEY);
       localStorage.removeItem(LOCAL_HISTORY_CACHE_KEY);
     } catch {}
-  };
+  }, []);
 
-  const openAuthModal = (tab: 'login' | 'register' = 'login', message?: string) => {
+  const openAuthModal = useCallback((tab: 'login' | 'register' = 'login', message?: string) => {
     setAuthModalTab(tab);
     setAuthModalMessage(message);
     setIsAuthModalOpen(true);
-  };
+  }, []);
 
-  const closeAuthModal = () => {
+  const closeAuthModal = useCallback(() => {
     setIsAuthModalOpen(false);
     setAuthModalMessage(undefined);
-  };
+  }, []);
 
-  const isInWatchlist = (contentId: number | string): boolean => {
+  const isInWatchlist = useCallback((contentId: number | string): boolean => {
     const normalized = String(contentId);
     return watchlist.some((item) => String(item.contentId) === normalized);
-  };
+  }, [watchlist]);
 
-  const toggleWatchlist = async (item: {
+  const toggleWatchlist = useCallback(async (item: {
     contentId: number | string;
     title: string;
     posterPath?: string | null;
@@ -307,38 +325,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     releaseDate?: string;
     urlPath?: string;
   }): Promise<boolean> => {
-    if (!user || authStatus !== 'authenticated') {
+    if (!userRef.current || authStatusRef.current !== 'authenticated') {
       openAuthModal('login', 'Silakan masuk terlebih dahulu untuk menyimpan ke Watchlist');
       return false;
     }
 
     const normalized = String(item.contentId);
-    const exists = isInWatchlist(normalized);
+    let isCurrentlyIn = false;
 
-    // Optimistic UI update
-    let nextList: WatchlistItem[];
-    if (exists) {
-      nextList = watchlist.filter((w) => String(w.contentId) !== normalized);
-    } else {
-      nextList = [
-        {
-          contentId: item.contentId,
-          title: item.title,
-          posterPath: item.posterPath,
-          backdropPath: item.backdropPath,
-          type: item.type,
-          rating: item.rating,
-          releaseDate: item.releaseDate,
-          urlPath: item.urlPath,
-          addedAt: Date.now(),
-        },
-        ...watchlist,
-      ];
-    }
-    setWatchlist(nextList);
-    try {
-      localStorage.setItem(LOCAL_WATCHLIST_CACHE_KEY, JSON.stringify(nextList));
-    } catch {}
+    setWatchlist((prevList) => {
+      const exists = prevList.some((w) => String(w.contentId) === normalized);
+      isCurrentlyIn = exists;
+      let nextList: WatchlistItem[];
+      if (exists) {
+        nextList = prevList.filter((w) => String(w.contentId) !== normalized);
+      } else {
+        nextList = [
+          {
+            contentId: item.contentId,
+            title: item.title,
+            posterPath: item.posterPath,
+            backdropPath: item.backdropPath,
+            type: item.type,
+            rating: item.rating,
+            releaseDate: item.releaseDate,
+            urlPath: item.urlPath,
+            addedAt: Date.now(),
+          },
+          ...prevList,
+        ];
+      }
+      try {
+        localStorage.setItem(LOCAL_WATCHLIST_CACHE_KEY, JSON.stringify(nextList));
+      } catch {}
+      return nextList;
+    });
 
     try {
       const res = await fetch('/api/user/watchlist', {
@@ -359,17 +380,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshProfile();
     }
 
-    return !exists;
-  };
+    return !isCurrentlyIn;
+  }, [openAuthModal, refreshProfile]);
 
-  const removeFromWatchlist = async (contentId: number | string) => {
-    if (!user || authStatus !== 'authenticated') return;
+  const removeFromWatchlist = useCallback(async (contentId: number | string) => {
+    if (!userRef.current || authStatusRef.current !== 'authenticated') return;
     const normalized = String(contentId);
-    const nextList = watchlist.filter((w) => String(w.contentId) !== normalized);
-    setWatchlist(nextList);
-    try {
-      localStorage.setItem(LOCAL_WATCHLIST_CACHE_KEY, JSON.stringify(nextList));
-    } catch {}
+
+    setWatchlist((prevList) => {
+      const nextList = prevList.filter((w) => String(w.contentId) !== normalized);
+      try {
+        localStorage.setItem(LOCAL_WATCHLIST_CACHE_KEY, JSON.stringify(nextList));
+      } catch {}
+      return nextList;
+    });
 
     try {
       const res = await fetch(`/api/user/watchlist?contentId=${encodeURIComponent(normalized)}`, {
@@ -386,9 +410,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('[AuthContext] removeFromWatchlist error:', err);
       refreshProfile();
     }
-  };
+  }, [refreshProfile]);
 
-  const addToHistory = async (item: {
+  const addToHistory = useCallback(async (item: {
     contentId: number | string;
     title: string;
     episodeTitle?: string;
@@ -398,10 +422,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     rating?: number;
     urlPath?: string;
   }) => {
-    if (!user || authStatus !== 'authenticated') return;
+    if (!userRef.current || authStatusRef.current !== 'authenticated') return;
 
     const normalized = String(item.contentId);
+    const key = `${normalized}_${item.episodeTitle || ''}`;
     const now = Date.now();
+
+    // Throttling: If same content was recorded within the last 60 seconds, skip network flood
+    const lastRecorded = recentHistoryRecordedRef.current.get(key);
+    if (lastRecorded && now - lastRecorded < 60000) {
+      return;
+    }
+    recentHistoryRecordedRef.current.set(key, now);
+
     const newEntry: HistoryItem = {
       contentId: item.contentId,
       title: item.title,
@@ -414,11 +447,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       viewedAt: now,
     };
 
-    const nextHistory = [newEntry, ...history.filter((h) => String(h.contentId) !== normalized)].slice(0, 50);
-    setHistory(nextHistory);
-    try {
-      localStorage.setItem(LOCAL_HISTORY_CACHE_KEY, JSON.stringify(nextHistory));
-    } catch {}
+    setHistory((prevHistory) => {
+      const nextHistory = [newEntry, ...prevHistory.filter((h) => String(h.contentId) !== normalized)].slice(0, 50);
+      try {
+        localStorage.setItem(LOCAL_HISTORY_CACHE_KEY, JSON.stringify(nextHistory));
+      } catch {}
+      return nextHistory;
+    });
 
     try {
       const res = await fetch('/api/user/history', {
@@ -434,18 +469,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch {}
       }
     } catch (err) {
-      console.warn('[AuthContext] addToHistory error:', err);
+      console.warn('[AuthContext] addToHistory fetch error:', err);
     }
-  };
+  }, []);
 
-  const removeFromHistory = async (contentId: number | string) => {
-    if (!user || authStatus !== 'authenticated') return;
+  const removeFromHistory = useCallback(async (contentId: number | string) => {
+    if (!userRef.current || authStatusRef.current !== 'authenticated') return;
     const normalized = String(contentId);
-    const nextHistory = history.filter((h) => String(h.contentId) !== normalized);
-    setHistory(nextHistory);
-    try {
-      localStorage.setItem(LOCAL_HISTORY_CACHE_KEY, JSON.stringify(nextHistory));
-    } catch {}
+
+    setHistory((prevHistory) => {
+      const nextHistory = prevHistory.filter((h) => String(h.contentId) !== normalized);
+      try {
+        localStorage.setItem(LOCAL_HISTORY_CACHE_KEY, JSON.stringify(nextHistory));
+      } catch {}
+      return nextHistory;
+    });
 
     try {
       const res = await fetch(`/api/user/history?contentId=${encodeURIComponent(normalized)}`, {
@@ -462,10 +500,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('[AuthContext] removeFromHistory error:', err);
       refreshProfile();
     }
-  };
+  }, [refreshProfile]);
 
-  const clearHistory = async () => {
-    if (!user || authStatus !== 'authenticated') return;
+  const clearHistory = useCallback(async () => {
+    if (!userRef.current || authStatusRef.current !== 'authenticated') return;
     setHistory([]);
     try {
       localStorage.removeItem(LOCAL_HISTORY_CACHE_KEY);
@@ -481,37 +519,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('[AuthContext] clearHistory error:', err);
       refreshProfile();
     }
-  };
+  }, [refreshProfile]);
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        authStatus,
-        isLoggedIn: authStatus === 'authenticated',
-        isLoading: authStatus === 'initializing',
-        isAuthModalOpen,
-        authModalTab,
-        authModalMessage,
-        openAuthModal,
-        closeAuthModal,
-        login,
-        register,
-        logout,
-        watchlist,
-        toggleWatchlist,
-        removeFromWatchlist,
-        isInWatchlist,
-        history,
-        addToHistory,
-        removeFromHistory,
-        clearHistory,
-        refreshProfile,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const contextValue = useMemo(
+    () => ({
+      user,
+      authStatus,
+      isLoggedIn: authStatus === 'authenticated',
+      isLoading: authStatus === 'initializing',
+      isAuthModalOpen,
+      authModalTab,
+      authModalMessage,
+      openAuthModal,
+      closeAuthModal,
+      login,
+      register,
+      logout,
+      watchlist,
+      toggleWatchlist,
+      removeFromWatchlist,
+      isInWatchlist,
+      history,
+      addToHistory,
+      removeFromHistory,
+      clearHistory,
+      refreshProfile,
+    }),
+    [
+      user,
+      authStatus,
+      isAuthModalOpen,
+      authModalTab,
+      authModalMessage,
+      openAuthModal,
+      closeAuthModal,
+      login,
+      register,
+      logout,
+      watchlist,
+      toggleWatchlist,
+      removeFromWatchlist,
+      isInWatchlist,
+      history,
+      addToHistory,
+      removeFromHistory,
+      clearHistory,
+      refreshProfile,
+    ]
   );
+
+  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
