@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Metadata } from 'next';
-import ProfilePageClient from './ProfilePageClient';
+import ProfilePageClient from '@/app/profile/ProfilePageClient';
 import siteConfig from '@/config';
 
 export const metadata: Metadata = {

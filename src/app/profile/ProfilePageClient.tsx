@@ -24,6 +24,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { useAuth, WatchlistItem, HistoryItem } from '@/context/AuthContext';
+import ProfileSkeleton from '@/components/skeletons/ProfileSkeleton';
 import siteConfig from '@/config';
 import { getImageUrl } from '@/lib/tmdb';
 
@@ -61,8 +62,8 @@ function formatJoinDate(dateVal?: string | number): string {
 export default function ProfilePageClient() {
   const {
     user,
+    authStatus,
     isLoggedIn,
-    isLoading,
     openAuthModal,
     logout,
     watchlist,
@@ -87,6 +88,11 @@ export default function ProfilePageClient() {
     await clearHistory();
     setConfirmClearHistory(false);
   };
+
+  // While checking initial session (and no local cache available), show smooth ProfileSkeleton
+  if (authStatus === 'initializing') {
+    return <ProfileSkeleton />;
+  }
 
   return (
     <div className="min-h-screen pt-20 sm:pt-24 pb-20 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 2xl:px-14" style={{ background: '#050816' }}>
@@ -652,3 +658,6 @@ export default function ProfilePageClient() {
     </div>
   );
 }
+
+export { ProfilePageClient };
+

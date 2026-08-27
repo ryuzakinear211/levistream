@@ -21,7 +21,7 @@ import siteConfig from '@/config';
 
 export default function LoginPageClient() {
   const router = useRouter();
-  const { login, register, user, logout } = useAuth();
+  const { login, register, user, logout, authStatus } = useAuth();
 
   const [tab, setTab] = useState<'login' | 'register'>('login');
   const [showPassword, setShowPassword] = useState(false);
@@ -162,6 +162,17 @@ export default function LoginPageClient() {
       setForgotSubmitted(true);
     }, 400);
   };
+
+  // While checking auth status
+  if (authStatus === 'initializing') {
+    return (
+      <div className="w-full min-h-[calc(100vh-14rem)] flex items-center justify-center px-4 py-8 sm:py-12">
+        <div className="w-full max-w-[380px] h-[340px] rounded-3xl p-6 sm:p-8 bg-white/[0.04] border border-white/10 skeleton flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   // If user is already logged in, show profile card with logout option
   if (user) {

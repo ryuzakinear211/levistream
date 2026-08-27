@@ -297,7 +297,7 @@ export default function Sidebar({ genres = [], isOpen, onToggle }: SidebarProps)
         {!isOpen ? (
           <div className="flex justify-center">
             <Link
-              href="/login"
+              href={user ? '/profile' : '/login'}
               title={user ? user.username : 'Masuk / Akun'}
               className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 text-cyan-400 hover:scale-105 active:scale-95"
               style={{
@@ -317,7 +317,7 @@ export default function Sidebar({ genres = [], isOpen, onToggle }: SidebarProps)
           </div>
         ) : (
           <Link
-            href="/login"
+            href={user ? '/profile' : '/login'}
             className="w-full flex items-center gap-3 p-2.5 rounded-2xl transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
             style={{
               background:
@@ -340,7 +340,7 @@ export default function Sidebar({ genres = [], isOpen, onToggle }: SidebarProps)
                 {user ? user.username : 'Masuk / Daftar'}
               </p>
               <p className="text-[10px] font-medium text-cyan-300 truncate">
-                {user ? 'Kelola Akun' : 'Buka Akses Watchlist'}
+                {user ? 'Profil & Watchlist' : 'Buka Akses Watchlist'}
               </p>
             </div>
           </Link>

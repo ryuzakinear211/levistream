@@ -136,9 +136,9 @@ export default function MobileHeader({ genres = [] }: MobileHeaderProps) {
 
         {/* Right: Login Button FIRST, followed by Hamburger Menu at the far right */}
         <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Distinctive Glassmorphic Login Button */}
+          {/* Distinctive Glassmorphic Login / Profile Button */}
           <Link
-            href="/login"
+            href={user ? '/profile' : '/login'}
             className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold text-cyan-300 transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5"
             style={{
               background:
