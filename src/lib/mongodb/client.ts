@@ -3,47 +3,78 @@ import { MONGODB_CONFIG } from './config';
 
 const uri = MONGODB_CONFIG.uri;
 
-// Serverless-friendly pool and timeout configuration for Vercel and Cloud environments
+// Serverless-optimized options for Vercel and AWS Lambda
 const options: MongoClientOptions = {
   maxPoolSize: 10,
   minPoolSize: 0,
-  serverSelectionTimeoutMS: 5000, // 5s max server selection timeout (never hangs 30s)
-  connectTimeoutMS: 5000,
-  socketTimeoutMS: 10000,
-  maxIdleTimeMS: 10000,
+  maxIdleTimeMS: 5000, // Close idle connections quickly to prevent stale TLS sockets on Vercel
+  serverSelectionTimeoutMS: 8000,
+  connectTimeoutMS: 8000,
+  socketTimeoutMS: 20000,
+  retryReads: true,
+  retryWrites: true,
+  tls: true,
 };
-
-let client: MongoClient;
-let clientPromise: Promise<MongoClient>;
 
 declare global {
   // eslint-disable-next-line no-var
   var _mongoClientPromise: Promise<MongoClient> | undefined;
+  // eslint-disable-next-line no-var
+  var _mongoClientInstance: MongoClient | undefined;
+}
+
+function createNewClient(): { client: MongoClient; promise: Promise<MongoClient> } {
+  const newClient = new MongoClient(uri, options);
+  const promise = newClient.connect().catch((err) => {
+    console.warn('[MongoDB] Connection initialization error:', err.message);
+    global._mongoClientPromise = undefined;
+    global._mongoClientInstance = undefined;
+    throw err;
+  });
+  return { client: newClient, promise };
 }
 
 if (!global._mongoClientPromise) {
-  client = new MongoClient(uri, options);
-  global._mongoClientPromise = client.connect().catch((err) => {
-    console.warn('[MongoDB] Client connection error:', err.message);
-    // Reset promise so next attempt can reconnect
-    global._mongoClientPromise = undefined;
-    throw err;
-  });
+  const { client, promise } = createNewClient();
+  global._mongoClientInstance = client;
+  global._mongoClientPromise = promise;
 }
-clientPromise = global._mongoClientPromise;
 
-export default clientPromise;
+export function resetMongoClient() {
+  if (global._mongoClientInstance) {
+    try {
+      global._mongoClientInstance.close(true).catch(() => {});
+    } catch {}
+  }
+  global._mongoClientPromise = undefined;
+  global._mongoClientInstance = undefined;
+}
 
+export default global._mongoClientPromise as Promise<MongoClient>;
+
+/**
+ * Returns active database with automatic retry on TLS/SSL socket errors
+ */
 export async function getDatabase() {
   try {
     if (!global._mongoClientPromise) {
-      client = new MongoClient(uri, options);
-      global._mongoClientPromise = client.connect();
+      const { client, promise } = createNewClient();
+      global._mongoClientInstance = client;
+      global._mongoClientPromise = promise;
     }
+
     const connectedClient = await global._mongoClientPromise;
     return connectedClient.db(MONGODB_CONFIG.dbName);
   } catch (err: any) {
-    console.warn('[MongoDB] getDatabase connection failed:', err.message);
-    throw err;
+    console.warn('[MongoDB] Primary connection failed, resetting and retrying:', err.message);
+    resetMongoClient();
+
+    // Reconnect with fresh client
+    const { client, promise } = createNewClient();
+    global._mongoClientInstance = client;
+    global._mongoClientPromise = promise;
+
+    const freshConnectedClient = await promise;
+    return freshConnectedClient.db(MONGODB_CONFIG.dbName);
   }
 }
