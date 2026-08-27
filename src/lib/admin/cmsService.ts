@@ -119,7 +119,7 @@ export async function fetchPaginatedAdminContent(
   const limit = Math.max(1, Number(options.limit) || 7);
   const moviePage = Math.max(1, Number(options.moviePage) || 1);
   const tvPage = Math.max(1, Number(options.tvPage) || 1);
-  const search = (options.search || '').trim();
+  const search = (options.search || '').trim().toLowerCase();
 
   // 1. Fetch Paginated Data from MongoDB in parallel (takes ~5-15ms)
   const [mongoMoviesPaged, mongoTVPaged, counts] = await Promise.all([
@@ -128,20 +128,100 @@ export async function fetchPaginatedAdminContent(
     getMongoContentCounts(),
   ]);
 
+  // Read local disk files for local/hybrid resiliency and zero data loss
+  let localDiskMovies: any[] = [];
+  let localDiskTVShows: any[] = [];
+
+  try {
+    if (fs.existsSync(VIDEO_DIR)) {
+      const files = fs.readdirSync(VIDEO_DIR).filter((f) => /\.(md|markdown)$/i.test(f));
+      localDiskMovies = files.map((file) => {
+        const fullPath = path.join(VIDEO_DIR, file);
+        const raw = fs.readFileSync(fullPath, 'utf8');
+        const stat = fs.statSync(fullPath);
+        const { data, content } = matter(raw);
+        const slug = file.replace(/\.(md|markdown)$/i, '');
+        return {
+          filename: file,
+          slug,
+          relativePath: `video/${file}`,
+          frontmatter: data || {},
+          content: content || '',
+          updatedAt: stat.mtimeMs || Date.now(),
+        };
+      });
+    }
+
+    if (fs.existsSync(TV_DIR)) {
+      const dirs = fs.readdirSync(TV_DIR, { withFileTypes: true }).filter((d) => d.isDirectory());
+      for (const d of dirs) {
+        const showPath = path.join(TV_DIR, d.name);
+        let indexData: any = {};
+        let indexContent = '';
+        const indexPath = fs.existsSync(path.join(showPath, '_index.md'))
+          ? path.join(showPath, '_index.md')
+          : fs.existsSync(path.join(showPath, 'index.md'))
+          ? path.join(showPath, 'index.md')
+          : null;
+
+        if (indexPath) {
+          const raw = fs.readFileSync(indexPath, 'utf8');
+          const parsed = matter(raw);
+          indexData = parsed.data || {};
+          indexContent = parsed.content || '';
+        }
+
+        const episodes: any[] = [];
+        const entries = fs.readdirSync(showPath, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.name === '_index.md' || entry.name === 'index.md') continue;
+          if (entry.isDirectory()) {
+            const seasonFolder = entry.name;
+            const seasonPath = path.join(showPath, seasonFolder);
+            const epFiles = fs.readdirSync(seasonPath).filter((f) => /\.(md|markdown)$/i.test(f));
+            for (const epFile of epFiles) {
+              const raw = fs.readFileSync(path.join(seasonPath, epFile), 'utf8');
+              const { data, content } = matter(raw);
+              const epSlug = epFile.replace(/\.(md|markdown)$/i, '');
+              episodes.push({
+                showSlug: d.name,
+                seasonFolder,
+                filename: epFile,
+                slug: epSlug,
+                relativePath: `tv/${d.name}/${seasonFolder}/${epFile}`,
+                frontmatter: data || {},
+                content: content || '',
+                displayTitle: data?.title || epSlug,
+                posterUrl: data?.image_url ? getImageUrl(data.image_url, 'w500') : null,
+                updatedAt: Date.now(),
+              });
+            }
+          }
+        }
+
+        localDiskTVShows.push({
+          showSlug: d.name,
+          relativePath: `tv/${d.name}/_index.md`,
+          indexFrontmatter: indexData,
+          indexContent,
+          updatedAt: Date.now(),
+          episodes,
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('[cmsService] Local disk scan notice:', err);
+  }
+
+  // ----------------------------------------------------
+  // RESOLVE MOVIES: Merge MongoDB + Local Disk Files seamlessly
+  // ----------------------------------------------------
   let rawMovies: any[] = [];
-  let totalMovies = mongoMoviesPaged.total;
-  let totalMoviePages = mongoMoviesPaged.totalPages;
+  let totalMovies = 0;
+  let totalMoviePages = 1;
+  let totalAllMoviesCount = 0;
 
-  let rawTvShows: any[] = [];
-  let totalTvShows = mongoTVPaged.total;
-  let totalTvPages = mongoTVPaged.totalPages;
-
-  let totalAllMoviesCount = counts.totalMovies;
-  let totalAllTvShowsCount = counts.totalTVShows;
-  let totalEpisodesCount = counts.totalEpisodes;
-
-  // If MongoDB returned documents, map them into admin item shapes
-  if (mongoMoviesPaged.items && mongoMoviesPaged.items.length > 0) {
+  if (mongoMoviesPaged.total > 0) {
     rawMovies = mongoMoviesPaged.items.map((m) => ({
       filename: `${m.slug}.md`,
       slug: m.slug,
@@ -160,9 +240,37 @@ export async function fetchPaginatedAdminContent(
       content: m.content || '',
       updatedAt: m.updatedAt || Date.now(),
     }));
+
+    totalMovies = mongoMoviesPaged.total;
+    totalMoviePages = mongoMoviesPaged.totalPages;
+    totalAllMoviesCount = counts.totalMovies || totalMovies;
+  } else if (localDiskMovies.length > 0) {
+    // If MongoDB returned 0 or is offline, paginate local disk movies
+    let filtered = localDiskMovies;
+    if (search) {
+      filtered = filtered.filter(
+        (m) =>
+          (m.frontmatter.title || m.slug).toLowerCase().includes(search) ||
+          String(m.frontmatter.tmdb_id || '').includes(search)
+      );
+    }
+    totalMovies = filtered.length;
+    totalMoviePages = Math.ceil(totalMovies / limit) || 1;
+    totalAllMoviesCount = localDiskMovies.length;
+    const start = (moviePage - 1) * limit;
+    rawMovies = filtered.slice(start, start + limit);
   }
 
-  if (mongoTVPaged.items && mongoTVPaged.items.length > 0) {
+  // ----------------------------------------------------
+  // RESOLVE TV SHOWS: Merge MongoDB + Local Disk Files seamlessly
+  // ----------------------------------------------------
+  let rawTvShows: any[] = [];
+  let totalTvShows = 0;
+  let totalTvPages = 1;
+  let totalAllTvShowsCount = 0;
+  let totalEpisodesCount = counts.totalEpisodes || 0;
+
+  if (mongoTVPaged.total > 0) {
     rawTvShows = mongoTVPaged.items.map((s) => ({
       showSlug: s.showSlug,
       relativePath: `tv/${s.showSlug}/_index.md`,
@@ -197,42 +305,25 @@ export async function fetchPaginatedAdminContent(
         updatedAt: ep.updatedAt || Date.now(),
       })),
     }));
-  }
 
-  // Fallback to local files only if MongoDB is completely empty/disconnected
-  if (totalMovies === 0 && totalTvShows === 0 && fs.existsSync(VIDEO_DIR)) {
-    try {
-      const localFiles = fs.readdirSync(VIDEO_DIR).filter((f) => /\.(md|markdown)$/i.test(f));
-      let filteredLocal = localFiles.map((file) => {
-        const fullPath = path.join(VIDEO_DIR, file);
-        const raw = fs.readFileSync(fullPath, 'utf8');
-        const stat = fs.statSync(fullPath);
-        const { data, content } = matter(raw);
-        return {
-          filename: file,
-          slug: file.replace(/\.(md|markdown)$/i, ''),
-          relativePath: `video/${file}`,
-          frontmatter: data,
-          content: content || '',
-          updatedAt: stat.mtimeMs || Date.now(),
-        };
-      });
-
-      if (search) {
-        const q = search.toLowerCase();
-        filteredLocal = filteredLocal.filter(
-          (m) =>
-            (m.frontmatter.title || m.slug).toLowerCase().includes(q) ||
-            String(m.frontmatter.tmdb_id || '').includes(q)
-        );
-      }
-
-      totalMovies = filteredLocal.length;
-      totalMoviePages = Math.ceil(totalMovies / limit) || 1;
-      totalAllMoviesCount = totalMovies;
-      const start = (moviePage - 1) * limit;
-      rawMovies = filteredLocal.slice(start, start + limit);
-    } catch {}
+    totalTvShows = mongoTVPaged.total;
+    totalTvPages = mongoTVPaged.totalPages;
+    totalAllTvShowsCount = counts.totalTVShows || totalTvShows;
+  } else if (localDiskTVShows.length > 0) {
+    let filtered = localDiskTVShows;
+    if (search) {
+      filtered = filtered.filter(
+        (s) =>
+          (s.indexFrontmatter.title || s.showSlug).toLowerCase().includes(search) ||
+          String(s.indexFrontmatter.tmdb_id || '').includes(search)
+      );
+    }
+    totalTvShows = filtered.length;
+    totalTvPages = Math.ceil(totalTvShows / limit) || 1;
+    totalAllTvShowsCount = localDiskTVShows.length;
+    totalEpisodesCount = localDiskTVShows.reduce((acc, s) => acc + (s.episodes?.length || 0), 0);
+    const start = (tvPage - 1) * limit;
+    rawTvShows = filtered.slice(start, start + limit);
   }
 
   // 2. ENRICH ONLY THE 7 ITEMS IN THE CURRENT PAGE (Blazing fast: ~10-20ms)
