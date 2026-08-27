@@ -37,16 +37,11 @@ export async function getEnrichedFeaturedMovies(options: {
   return memoryCache.getOrFetch<FeaturedItem[]>(
     cacheKey,
     async () => {
-      // 1. Fetch custom featured movies & custom featured TV shows
-      const [customMovies, customTV] = await Promise.all([
-        getAllFeaturedCustomMovies().catch(() => []),
-        getAllFeaturedCustomTV().catch(() => []),
-      ]);
+      // 1. Fetch custom featured movies ONLY (Home page features movies only)
+      const customMovies = await getAllFeaturedCustomMovies().catch(() => []);
 
-      const allCustomFeatured = [...customMovies, ...customTV];
-
-      if (allCustomFeatured.length > 0) {
-        return allCustomFeatured.slice(0, maxItems);
+      if (customMovies.length > 0) {
+        return customMovies.slice(0, maxItems);
       }
 
       // 2. Fallback to TMDB trending movies

@@ -240,15 +240,19 @@ export async function getAllCustomTVSlugPaths(): Promise<{ slug: string[] }[]> {
  * Supports directory name, title-year (lanterns-2026), TMDB ID, title slug, and title-id slug.
  */
 export async function getCustomTVShowBySlug(showSlugOrTmdbId: string | number): Promise<CustomTVShowData | null> {
-  // 1. Check MongoDB first (Cloud Source of Truth)
-  if (isMongoConfigured()) {
-    try {
-      const searchStr = String(showSlugOrTmdbId).trim().toLowerCase();
-      const cleanSearch = searchStr.replace(/-(19\d{2}|20\d{2}|\d+)$/, '');
-      let mongoDoc = await getMongoTVShowBySlug(searchStr);
-      if (!mongoDoc && cleanSearch !== searchStr) {
-        mongoDoc = await getMongoTVShowBySlug(cleanSearch);
-      }
+  const cacheKey = `custom_tv_by_slug_${String(showSlugOrTmdbId).trim().toLowerCase()}`;
+  return memoryCache.getOrFetch<CustomTVShowData | null>(
+    cacheKey,
+    async () => {
+      // 1. Check MongoDB first (Cloud Source of Truth)
+      if (isMongoConfigured()) {
+        try {
+          const searchStr = String(showSlugOrTmdbId).trim().toLowerCase();
+          const cleanSearch = searchStr.replace(/-(19\d{2}|20\d{2}|\d+)$/, '');
+          let mongoDoc = await getMongoTVShowBySlug(searchStr);
+          if (!mongoDoc && cleanSearch !== searchStr) {
+            mongoDoc = await getMongoTVShowBySlug(cleanSearch);
+          }
 
       if (mongoDoc) {
         const episodes: CustomEpisode[] = (mongoDoc.episodes || []).map((ep) => {
@@ -600,16 +604,20 @@ export async function getCustomTVShowBySlug(showSlugOrTmdbId: string | number): 
     });
   });
 
-  return {
-    slug: matchedDir,
-    dirName: matchedDir,
-    showSlug: matchedDir,
-    hasSeasons,
-    frontmatter: indexFrontmatter,
-    contentHtml: indexContentHtml,
-    seasons,
-    allEpisodes,
-  };
+    return {
+      slug: matchedDir,
+      dirName: matchedDir,
+      showSlug: matchedDir,
+      hasSeasons,
+      frontmatter: indexFrontmatter,
+      contentHtml: indexContentHtml,
+      seasons,
+      allEpisodes,
+    };
+  },
+  60_000,
+  15_000
+);
 }
 
 /**

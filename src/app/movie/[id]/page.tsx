@@ -210,7 +210,7 @@ export default async function MovieDetailPage({ params }: PageProps) {
         thumbnailUrl: [thumbnailImage],
         uploadDate: uploadDate,
         duration: durationIso,
-        contentUrl: pageUrl,
+        contentUrl: videoUrl || pageUrl,
         embedUrl: embedUrl,
         publisher: {
           '@type': 'Organization',

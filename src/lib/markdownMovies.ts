@@ -219,150 +219,158 @@ export function getCustomMovieSlugsByTmdbId(): Record<number, string> {
  * Finds and parses a custom markdown movie by its slug, title slug, title-year, trailing ID, or tmdb_id.
  */
 export async function getCustomMovieBySlug(slugOrId: string | number): Promise<CustomMovieData | null> {
-  // 1. Check MongoDB first (Persistent Cloud Source of Truth)
-  if (isMongoConfigured()) {
-    try {
-      const mongoDoc = await getMongoMovieBySlug(slugOrId);
-      if (mongoDoc) {
-        const frontmatter: CustomMovieFrontmatter = {
-          title: mongoDoc.title,
-          tmdb_id: mongoDoc.tmdb_id,
-          rating: mongoDoc.rating,
-          deskripsi: mongoDoc.deskripsi,
-          videourl: mongoDoc.videourl,
-          image_url: mongoDoc.image_url,
-          featured: mongoDoc.featured,
-          subtitles: mongoDoc.subtitles,
-          duration: mongoDoc.duration,
-        };
-        const contentHtml = mongoDoc.content ? (marked.parse(mongoDoc.content) as string) : '';
-        return {
-          slug: mongoDoc.slug,
-          filename: `${mongoDoc.slug}.md`,
-          frontmatter,
-          contentHtml,
-          rawContent: mongoDoc.content || '',
-        };
-      }
-      return null;
-    } catch (mErr) {
-      console.warn('[markdownMovies] MongoDB getCustomMovieBySlug notice:', mErr);
-    }
-  }
-
-  ensureContentDirExists();
-  const searchKey = String(slugOrId).trim().toLowerCase();
-  const cleanKey = searchKey.replace(/\.(md|markdown)$/i, '');
-  const isNumeric = /^\d+$/.test(cleanKey);
-
-  // Check if searchKey has trailing ID or 4-digit year (e.g. "mutiny-2026" or "mutiny-1288445")
-  const idMatch = cleanKey.match(/-(\d{4,})$/);
-  const trailingId = idMatch ? idMatch[1] : null;
-  const cleanWithoutSuffix = cleanKey.replace(/-(19\d{2}|20\d{2}|\d{4,})$/, '');
-
-  const files = await getAllCustomMovieFilesAsync();
-  let matchedFile: string | null = null;
-  let fileContent = '';
-
-  // 1. Direct filename exact match (e.g. "toy-story-5-2026.md", "movie.md")
-  for (const file of files) {
-    const fileWithoutExt = file.replace(/\.(md|markdown)$/i, '').toLowerCase();
-    const fullFileName = file.toLowerCase();
-
-    if (fullFileName === searchKey || fileWithoutExt === cleanKey) {
-      if (isNumeric && fileWithoutExt !== cleanKey) {
-        continue;
-      }
-      matchedFile = file;
-      break;
-    }
-  }
-
-  // 2. Fetch file content for matched file
-  if (matchedFile) {
-    try {
-      const filePath = path.join(CONTENT_DIR, matchedFile);
-      if (fs.existsSync(filePath)) {
-        fileContent = fs.readFileSync(filePath, 'utf8');
-      }
-    } catch (err) {
-      console.error(`Error reading ${matchedFile}:`, err);
-    }
-  }
-
-  // 3. Match by frontmatter tmdb_id, exact title slug, or title-year slug across files
-  if (!matchedFile || !fileContent) {
-    for (const file of files) {
-      try {
-        let rawContent = '';
-        const filePath = path.join(CONTENT_DIR, file);
-        if (fs.existsSync(filePath)) {
-          rawContent = fs.readFileSync(filePath, 'utf8');
+  const cacheKey = `custom_movie_by_slug_${String(slugOrId).trim().toLowerCase()}`;
+  return memoryCache.getOrFetch<CustomMovieData | null>(
+    cacheKey,
+    async () => {
+      // 1. Check MongoDB first (Persistent Cloud Source of Truth)
+      if (isMongoConfigured()) {
+        try {
+          const mongoDoc = await getMongoMovieBySlug(slugOrId);
+          if (mongoDoc) {
+            const frontmatter: CustomMovieFrontmatter = {
+              title: mongoDoc.title,
+              tmdb_id: mongoDoc.tmdb_id,
+              rating: mongoDoc.rating,
+              deskripsi: mongoDoc.deskripsi,
+              videourl: mongoDoc.videourl,
+              image_url: mongoDoc.image_url,
+              featured: mongoDoc.featured,
+              subtitles: mongoDoc.subtitles,
+              duration: mongoDoc.duration,
+            };
+            const contentHtml = mongoDoc.content ? (marked.parse(mongoDoc.content) as string) : '';
+            return {
+              slug: mongoDoc.slug,
+              filename: `${mongoDoc.slug}.md`,
+              frontmatter,
+              contentHtml,
+              rawContent: mongoDoc.content || '',
+            };
+          }
+          return null;
+        } catch (mErr) {
+          console.warn('[markdownMovies] MongoDB getCustomMovieBySlug notice:', mErr);
         }
-        if (!rawContent) continue;
+      }
 
-        const parsed = matter(rawContent);
-        const data = parsed.data as CustomMovieFrontmatter;
+      ensureContentDirExists();
+      const searchKey = String(slugOrId).trim().toLowerCase();
+      const cleanKey = searchKey.replace(/\.(md|markdown)$/i, '');
+      const isNumeric = /^\d+$/.test(cleanKey);
 
-        if (data) {
-          const tmdbIdStr = String(data.tmdb_id || '').trim();
-          const titleSlug = cleanSlug(data.title);
+      // Check if searchKey has trailing ID or 4-digit year (e.g. "mutiny-2026" or "mutiny-1288445")
+      const idMatch = cleanKey.match(/-(\d{4,})$/);
+      const trailingId = idMatch ? idMatch[1] : null;
+      const cleanWithoutSuffix = cleanKey.replace(/-(19\d{2}|20\d{2}|\d{4,})$/, '');
 
-          // If searchKey is a numeric TMDB ID (e.g. "533535" or "94")
-          if (isNumeric) {
-            if (tmdbIdStr === cleanKey) {
-              matchedFile = file;
-              fileContent = rawContent;
-              break;
-            }
+      const files = await getAllCustomMovieFilesAsync();
+      let matchedFile: string | null = null;
+      let fileContent = '';
+
+      // 1. Direct filename exact match (e.g. "toy-story-5-2026.md", "movie.md")
+      for (const file of files) {
+        const fileWithoutExt = file.replace(/\.(md|markdown)$/i, '').toLowerCase();
+        const fullFileName = file.toLowerCase();
+
+        if (fullFileName === searchKey || fileWithoutExt === cleanKey) {
+          if (isNumeric && fileWithoutExt !== cleanKey) {
             continue;
           }
+          matchedFile = file;
+          break;
+        }
+      }
 
-          // Direct TMDB ID match or trailing ID match (e.g. "mutiny-1288445" -> tmdb_id 1288445)
-          if (tmdbIdStr && (tmdbIdStr === cleanKey || (trailingId && tmdbIdStr === trailingId))) {
-            matchedFile = file;
-            fileContent = rawContent;
-            break;
+      // 2. Fetch file content for matched file
+      if (matchedFile) {
+        try {
+          const filePath = path.join(CONTENT_DIR, matchedFile);
+          if (fs.existsSync(filePath)) {
+            fileContent = fs.readFileSync(filePath, 'utf8');
           }
+        } catch (err) {
+          console.error(`Error reading ${matchedFile}:`, err);
+        }
+      }
 
-          // Exact title slug match (e.g. "mutiny" === "mutiny" or "mutiny-2026" === "mutiny-2026")
-          if (titleSlug) {
-            const year = data.year || (data.release_date ? data.release_date.slice(0, 4) : undefined);
-            if (
-              titleSlug === cleanKey ||
-              titleSlug === cleanWithoutSuffix ||
-              (year && cleanKey === `${titleSlug}-${year}`) ||
-              (tmdbIdStr && cleanKey === `${titleSlug}-${tmdbIdStr}`)
-            ) {
-              matchedFile = file;
-              fileContent = rawContent;
-              break;
+      // 3. Match by frontmatter tmdb_id, exact title slug, or title-year slug across files
+      if (!matchedFile || !fileContent) {
+        for (const file of files) {
+          try {
+            let rawContent = '';
+            const filePath = path.join(CONTENT_DIR, file);
+            if (fs.existsSync(filePath)) {
+              rawContent = fs.readFileSync(filePath, 'utf8');
             }
+            if (!rawContent) continue;
+
+            const parsed = matter(rawContent);
+            const data = parsed.data as CustomMovieFrontmatter;
+
+            if (data) {
+              const tmdbIdStr = String(data.tmdb_id || '').trim();
+              const titleSlug = cleanSlug(data.title);
+
+              // If searchKey is a numeric TMDB ID (e.g. "533535" or "94")
+              if (isNumeric) {
+                if (tmdbIdStr === cleanKey) {
+                  matchedFile = file;
+                  fileContent = rawContent;
+                  break;
+                }
+                continue;
+              }
+
+              // Direct TMDB ID match or trailing ID match (e.g. "mutiny-1288445" -> tmdb_id 1288445)
+              if (tmdbIdStr && (tmdbIdStr === cleanKey || (trailingId && tmdbIdStr === trailingId))) {
+                matchedFile = file;
+                fileContent = rawContent;
+                break;
+              }
+
+              // Exact title slug match (e.g. "mutiny" === "mutiny" or "mutiny-2026" === "mutiny-2026")
+              if (titleSlug) {
+                const year = data.year || (data.release_date ? data.release_date.slice(0, 4) : undefined);
+                if (
+                  titleSlug === cleanKey ||
+                  titleSlug === cleanWithoutSuffix ||
+                  (year && cleanKey === `${titleSlug}-${year}`) ||
+                  (tmdbIdStr && cleanKey === `${titleSlug}-${tmdbIdStr}`)
+                ) {
+                  matchedFile = file;
+                  fileContent = rawContent;
+                  break;
+                }
+              }
+            }
+          } catch (err) {
+            console.error(`Error reading ${file}:`, err);
           }
         }
-      } catch (err) {
-        console.error(`Error reading ${file}:`, err);
       }
-    }
-  }
 
-  if (!matchedFile || !fileContent) {
-    return null;
-  }
+      if (!matchedFile || !fileContent) {
+        return null;
+      }
 
-  const { data, content } = matter(fileContent);
-  const frontmatter = data as CustomMovieFrontmatter;
+      const { data, content } = matter(fileContent);
+      const frontmatter = data as CustomMovieFrontmatter;
 
-  // Convert markdown body to HTML
-  const contentHtml = await marked.parse(content || '');
+      // Convert markdown body to HTML
+      const contentHtml = await marked.parse(content || '');
 
-  return {
-    slug: matchedFile.replace(/\.(md|markdown)$/i, ''),
-    filename: matchedFile,
-    frontmatter,
-    contentHtml,
-    rawContent: content,
-  };
+      return {
+        slug: matchedFile.replace(/\.(md|markdown)$/i, ''),
+        filename: matchedFile,
+        frontmatter,
+        contentHtml,
+        rawContent: content,
+      };
+    },
+    60_000,
+    15_000
+  );
 }
 
 /**
