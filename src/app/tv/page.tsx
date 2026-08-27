@@ -11,7 +11,8 @@ import {
   getTVGenres,
   getGenres,
 } from '@/lib/tmdb';
-import { getAllFeaturedCustomTV, getAllCustomTVShowsForList } from '@/lib/markdownTV';
+import { getEnrichedFeaturedTV } from '@/lib/featured';
+import { getAllCustomTVShowsForList } from '@/lib/markdownTV';
 import siteConfig from '@/config';
 
 export const metadata: Metadata = {
@@ -36,7 +37,7 @@ export default async function TVPage() {
     getTopRatedTV(1),
     getAiringTodayTV(1),
     getTVGenres().catch(() => getGenres()),
-    getAllFeaturedCustomTV(),
+    getEnrichedFeaturedTV({ maxItems: 6 }),
     getAllCustomTVShowsForList(),
   ]);
 

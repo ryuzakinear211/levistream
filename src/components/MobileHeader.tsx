@@ -29,10 +29,15 @@ interface MobileHeaderProps {
 }
 
 export default function MobileHeader({ genres = [] }: MobileHeaderProps) {
-  const { user, authStatus, isLoggedIn } = useAuth();
+  const { user, isLoggedIn } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Close menu on route change
   useEffect(() => {
@@ -136,8 +141,15 @@ export default function MobileHeader({ genres = [] }: MobileHeaderProps) {
 
         {/* Right: Login / Profile Button FIRST, followed by Search & Hamburger Menu */}
         <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Distinctive Glassmorphic Login / Profile Button beside hamburger icon */}
-          {isLoggedIn && user ? (
+          {/* Zero-Flicker Glassmorphic Login / Profile Button */}
+          {!mounted ? (
+            <div
+              className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold opacity-0 pointer-events-none flex items-center gap-1.5"
+              style={{ minWidth: '70px' }}
+            >
+              <span>Login</span>
+            </div>
+          ) : isLoggedIn && user ? (
             <Link
               href="/profile"
               className="px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold text-cyan-300 transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5"
@@ -198,7 +210,7 @@ export default function MobileHeader({ genres = [] }: MobileHeaderProps) {
         </div>
       </div>
 
-      {/* ── Modern Floating Glassmorphism Mobile Menu (Clean without redundant login/riwayat in drawer) ── */}
+      {/* ── Modern Floating Glassmorphism Mobile Menu ── */}
       {menuOpen && (
         <div
           className="absolute top-full left-0 right-0 p-4 sm:p-5 rounded-b-3xl border-b border-x transition-all duration-300 animate-in fade-in slide-in-from-top-4"

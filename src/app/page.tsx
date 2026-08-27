@@ -10,7 +10,7 @@ import {
   getTrendingTV,
   getGenres,
 } from '@/lib/tmdb';
-import { getEnrichedFeaturedItems } from '@/lib/featured';
+import { getEnrichedFeaturedMovies } from '@/lib/featured';
 import { getAllCustomMoviesForList } from '@/lib/markdownMovies';
 import { getAllCustomTVShowsForList } from '@/lib/markdownTV';
 import siteConfig from '@/config';
@@ -57,10 +57,9 @@ export default async function HomePage() {
     ...trendingTV.filter((t: any) => !customTV.some((ct: any) => ct.id === t.id || ct.customSlug === String(t.id))),
   ];
 
-  // Enriched, deduplicated featured items with API fallback & custom page priority
-  const featuredItems = await getEnrichedFeaturedItems({
+  // Enriched, deduplicated featured movies only for Home Page
+  const featuredItems = await getEnrichedFeaturedMovies({
     dynamicFallbackMovies: trending,
-    dynamicFallbackTV: trendingTV,
     maxItems: 6,
   });
 
