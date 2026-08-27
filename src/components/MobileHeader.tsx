@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation';
 import {
   Menu,
   X,
-  LogIn,
   Home,
   Film,
   Tv,
@@ -21,7 +20,6 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { Genre } from '@/types/tmdb';
-import { useAuth } from '@/context/AuthContext';
 import siteConfig from '@/config';
 
 interface MobileHeaderProps {
@@ -29,7 +27,6 @@ interface MobileHeaderProps {
 }
 
 export default function MobileHeader({ genres = [] }: MobileHeaderProps) {
-  const { user, authStatus, isLoggedIn } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -134,53 +131,22 @@ export default function MobileHeader({ genres = [] }: MobileHeaderProps) {
           </span>
         </Link>
 
-        {/* Right: Login / Profile Button FIRST, followed by Hamburger Menu at the far right */}
+        {/* Right: Search Quick Link & Hamburger Menu */}
         <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Distinctive Glassmorphic Login / Profile Button */}
-          {authStatus === 'initializing' ? (
-            <div className="w-20 h-8 rounded-xl bg-white/[0.08] skeleton" />
-          ) : isLoggedIn && user ? (
-            <Link
-              href="/profile"
-              className="px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold text-cyan-300 transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5"
-              style={{
-                background:
-                  'linear-gradient(135deg, rgba(6, 182, 212, 0.18) 0%, rgba(124, 58, 237, 0.22) 100%)',
-                border: '1px solid rgba(6, 182, 212, 0.45)',
-                boxShadow: '0 0 16px rgba(6, 182, 212, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
-              }}
-            >
-              <div
-                className="w-5 h-5 rounded-lg flex items-center justify-center overflow-hidden border border-cyan-400/60 shadow-[0_0_8px_rgba(6,182,212,0.4)]"
-                style={{ background: 'linear-gradient(135deg, #06b6d4, #7c3aed)' }}
-              >
-                {user.avatar ? (
-                  <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="font-black text-[10px] text-white">
-                    {user.username.charAt(0).toUpperCase()}
-                  </span>
-                )}
-              </div>
-              <span className="max-w-[70px] truncate text-white">{user.username}</span>
-            </Link>
-          ) : (
-            <Link
-              href="/login"
-              className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold text-cyan-300 transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5"
-              style={{
-                background:
-                  'linear-gradient(135deg, rgba(6, 182, 212, 0.16) 0%, rgba(124, 58, 237, 0.22) 100%)',
-                border: '1px solid rgba(6, 182, 212, 0.45)',
-                boxShadow: '0 0 18px rgba(6, 182, 212, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
-              }}
-            >
-              <LogIn size={13} className="text-cyan-400" />
-              <span>Login</span>
-            </Link>
-          )}
+          {/* Search Button */}
+          <Link
+            href="/search"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all duration-200 active:scale-95 text-slate-300 hover:text-cyan-400"
+            style={{
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+            }}
+            aria-label="Cari Film & Serial"
+          >
+            <Search size={18} />
+          </Link>
 
-          {/* Hamburger Menu Toggle Button (Far Right) */}
+          {/* Hamburger Menu Toggle Button */}
           <button
             type="button"
             onClick={() => setMenuOpen(!menuOpen)}
@@ -213,63 +179,6 @@ export default function MobileHeader({ genres = [] }: MobileHeaderProps) {
               '0 25px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(6, 182, 212, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
           }}
         >
-          {/* Top User Card inside Drawer */}
-          <div className="mb-3.5 pb-3 border-b border-white/[0.08]">
-            {isLoggedIn && user ? (
-              <Link
-                href="/profile"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-3 p-3 rounded-2xl transition-all duration-200 hover:scale-[1.01]"
-                style={{
-                  background:
-                    'linear-gradient(135deg, rgba(6, 182, 212, 0.14) 0%, rgba(124, 58, 237, 0.18) 100%)',
-                  border: '1px solid rgba(6, 182, 212, 0.35)',
-                }}
-              >
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden border border-cyan-400/50 shadow-[0_0_12px_rgba(6,182,212,0.35)]"
-                  style={{ background: 'linear-gradient(135deg, #06b6d4, #7c3aed)' }}
-                >
-                  {user.avatar ? (
-                    <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="font-black text-sm text-white">
-                      {user.username.charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-bold text-white truncate">{user.username}</p>
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                      MEMBER
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-400 truncate">{user.email}</p>
-                </div>
-              </Link>
-            ) : (
-              <Link
-                href="/login"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center justify-between p-3 rounded-2xl transition-all duration-200 hover:scale-[1.01]"
-                style={{
-                  background: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                }}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-                    <LogIn size={16} />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-white">Masuk / Daftar Akun</p>
-                    <p className="text-[10px] text-slate-400">Simpan watchlist & riwayat tontonan</p>
-                  </div>
-                </div>
-              </Link>
-            )}
-          </div>
           {/* Section 1: Primary Navigation Cards (2x2 Grid, Clean & Simple) */}
           <div className="grid grid-cols-2 gap-2.5 mb-4">
             {navCards.map((card) => {
@@ -350,7 +259,7 @@ export default function MobileHeader({ genres = [] }: MobileHeaderProps) {
 
           {/* Section 3: Action Buttons (Request Film & Donasi) */}
           <div className="pt-3 mt-3 border-t border-white/[0.08] flex items-center justify-between gap-2.5">
-            {/* Request Film Button (No destination) */}
+            {/* Request Film Button */}
             <button
               type="button"
               className="flex-1 py-2.5 px-3.5 rounded-xl text-xs font-bold text-slate-200 hover:text-cyan-300 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
@@ -364,7 +273,7 @@ export default function MobileHeader({ genres = [] }: MobileHeaderProps) {
               <span>Request</span>
             </button>
 
-            {/* Donasi Button (No destination) */}
+            {/* Donasi Button */}
             <button
               type="button"
               className="flex-1 py-2.5 px-3.5 rounded-xl text-xs font-bold text-slate-200 hover:text-rose-300 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
