@@ -47,17 +47,28 @@ export async function getEnrichedFeaturedItems(options: GetFeaturedOptions = {})
       const customFeaturedList: FeaturedItem[] = [];
       const seenKeys = new Set<string>();
 
-      for (const item of [...customMovies, ...customTV]) {
-        const key = `${item.type || 'movie'}-${item.id || item.tmdbId || item.title}`.toLowerCase();
-        if (!seenKeys.has(key)) {
-          seenKeys.add(key);
-          customFeaturedList.push(item);
+      // Interleave movies and TV shows for balanced presentation
+      const maxLen = Math.max(customMovies.length, customTV.length);
+      for (let i = 0; i < maxLen; i++) {
+        if (i < customMovies.length) {
+          const item = customMovies[i];
+          const key = `movie-${item.id || item.tmdbId || item.title}`.toLowerCase();
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            customFeaturedList.push(item);
+          }
+        }
+        if (i < customTV.length) {
+          const item = customTV[i];
+          const key = `tv-${item.id || item.tmdbId || item.title}`.toLowerCase();
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            customFeaturedList.push(item);
+          }
         }
       }
 
-      // STRICT RULE:
       // If there is custom content with `featured: true`, USE ONLY THAT!
-      // Do NOT mix or alternate with TMDB API.
       if (customFeaturedList.length > 0) {
         return customFeaturedList.slice(0, maxItems);
       }

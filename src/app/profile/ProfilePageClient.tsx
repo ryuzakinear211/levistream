@@ -75,10 +75,11 @@ function WatchlistCardItem({
   const posterSrc = item.posterPath
     ? item.posterPath.startsWith('http')
       ? item.posterPath
-      : getImageUrl(item.posterPath, 'w500')
+      : getImageUrl(item.posterPath, 'w342')
     : '/placeholder-poster.svg';
-  const rating = typeof item.rating === 'number' && item.rating > 0 ? Math.round(item.rating * 10) / 10 : null;
-  const year = item.releaseDate ? item.releaseDate.slice(0, 4) : '2026';
+  const rawRating = Number(item.rating || item.vote_average || item.voteAverage);
+  const rating = !isNaN(rawRating) && rawRating > 0 ? Math.round(rawRating * 10) / 10 : null;
+  const year = item.releaseDate ? String(item.releaseDate).slice(0, 4) : '2026';
 
   return (
     <div className="group block w-full select-none">
@@ -105,7 +106,7 @@ function WatchlistCardItem({
           {/* ── IMDb-Style Yellow Rating Badge (Top-Right) ── */}
           <div className="absolute top-2 right-2 z-10 flex items-center gap-1 px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded-md bg-[#f5c518] text-black font-black text-[10px] sm:text-[11.5px] shadow-lg shadow-black/50 tracking-tight">
             <Star size={11} fill="currentColor" stroke="none" className="text-black" />
-            <span>{rating ? rating.toFixed(1) : 'NR'}</span>
+            <span>{typeof rating === 'number' && rating > 0 ? rating.toFixed(1) : 'NR'}</span>
           </div>
 
           {/* ── Media Type Badge (Top-Left: Series / Movie) ── */}

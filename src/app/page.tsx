@@ -60,7 +60,8 @@ export default async function HomePage() {
   // Enriched, deduplicated featured items with API fallback & custom page priority
   const featuredItems = await getEnrichedFeaturedItems({
     dynamicFallbackMovies: trending,
-    maxItems: 5,
+    dynamicFallbackTV: trendingTV,
+    maxItems: 6,
   });
 
   const featuredMovie = trending[0] || popular[0];

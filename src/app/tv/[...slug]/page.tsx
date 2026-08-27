@@ -441,6 +441,8 @@ export default async function TVShowPage({ params }: PageProps) {
                       showTitle={data.name}
                       showId={data.id}
                       posterPath={data.poster_path}
+                      rating={data.vote_average}
+                      releaseDate={data.first_air_date}
                     />
                   </div>
                 </div>

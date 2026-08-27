@@ -30,6 +30,8 @@ interface TVDetailHeaderActionsProps {
   showTitle: string;
   showId?: string | number;
   posterPath?: string | null;
+  rating?: number | string | null;
+  releaseDate?: string | null;
 }
 
 export function TVDetailHeaderActions({
@@ -37,12 +39,15 @@ export function TVDetailHeaderActions({
   showTitle,
   showId,
   posterPath,
+  rating,
+  releaseDate,
 }: TVDetailHeaderActionsProps) {
   const [showTrailer, setShowTrailer] = useState(false);
   const { toggleWatchlist, isInWatchlist } = useAuth();
 
   const itemId = showId || showTitle;
   const isSaved = isInWatchlist(itemId);
+  const numRating = rating !== undefined && rating !== null ? Number(rating) : undefined;
 
   const handleWatchlistClick = () => {
     toggleWatchlist({
@@ -50,6 +55,8 @@ export function TVDetailHeaderActions({
       title: showTitle,
       posterPath: posterPath || null,
       type: 'tv',
+      rating: numRating,
+      releaseDate: releaseDate || undefined,
     });
   };
 

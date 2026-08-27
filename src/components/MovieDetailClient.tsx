@@ -13,6 +13,8 @@ interface MovieDetailClientProps {
   trailerKey?: string | null;
   homepage?: string | null;
   hasCustomVideo?: boolean;
+  rating?: number | string | null;
+  releaseDate?: string | null;
 }
 
 export default function MovieDetailClient({
@@ -20,6 +22,8 @@ export default function MovieDetailClient({
   movieId,
   posterPath,
   trailerKey,
+  rating,
+  releaseDate,
 }: MovieDetailClientProps) {
   const [showTrailer, setShowTrailer] = useState(false);
   const { toggleWatchlist, isInWatchlist, addToHistory } = useAuth();
@@ -27,6 +31,8 @@ export default function MovieDetailClient({
   const itemId = movieId || movieTitle;
   const isSaved = isInWatchlist(itemId);
   const hasRecordedRef = useRef(false);
+
+  const numRating = rating !== undefined && rating !== null ? Number(rating) : undefined;
 
   // Automatically record view to user history once if logged in
   useEffect(() => {
@@ -47,6 +53,8 @@ export default function MovieDetailClient({
       title: movieTitle,
       posterPath: posterPath || null,
       type: 'movie',
+      rating: numRating,
+      releaseDate: releaseDate || undefined,
     });
   };
 
@@ -60,7 +68,7 @@ export default function MovieDetailClient({
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg"
             style={{
               background: 'linear-gradient(135deg, #06b6d4, #7c3aed)',
-              boxShadow: '0 0 18px rgba(6,182,212,0.35)',
+              boxShadow: '0 0 20px rgba(6, 182, 212, 0.4)',
             }}
           >
             <Film size={16} />
@@ -68,23 +76,20 @@ export default function MovieDetailClient({
           </button>
         )}
 
-        {/* Bookmark / Watchlist Button */}
+        {/* Watchlist Toggle Button */}
         <button
           onClick={handleWatchlistClick}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-200 hover:scale-105 active:scale-95"
-          style={{
-            background: isSaved ? 'rgba(6,182,212,0.18)' : 'rgba(255,255,255,0.06)',
-            border: isSaved
-              ? '1px solid rgba(6,182,212,0.5)'
-              : '1px solid rgba(255,255,255,0.1)',
-            color: isSaved ? '#06b6d4' : '#f1f5f9',
-          }}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-200 hover:scale-105 active:scale-95 border ${
+            isSaved
+              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.25)]'
+              : 'bg-white/5 text-slate-300 border-white/10 hover:text-white hover:bg-white/10'
+          }`}
         >
           <Bookmark size={16} fill={isSaved ? 'currentColor' : 'none'} />
-          <span>{isSaved ? 'Saved' : 'Watchlist'}</span>
+          <span>{isSaved ? 'Di Watchlist' : 'Tambah ke Watchlist'}</span>
         </button>
 
-        {/* Share Button */}
+        {/* Social Share Button */}
         <ShareButton title={movieTitle} />
       </div>
 
@@ -92,7 +97,7 @@ export default function MovieDetailClient({
       {showTrailer && trailerKey && (
         <TrailerModal
           videoKey={trailerKey}
-          title={`${movieTitle} - Official Trailer`}
+          title={movieTitle}
           onClose={() => setShowTrailer(false)}
         />
       )}

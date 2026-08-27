@@ -544,7 +544,32 @@ export async function getAllFeaturedCustomMovies(): Promise<FeaturedItem[]> {
     'featured_custom_movies_list',
     async () => {
       try {
-        const mongoMovies = await getMongoMovies();
+        let mongoMovies = await getMongoMovies();
+        if (!mongoMovies || mongoMovies.length === 0) {
+          ensureContentDirExists();
+          const files = getAllCustomMovieFiles();
+          mongoMovies = files.map((file) => {
+            try {
+              const raw = fs.readFileSync(path.join(CONTENT_DIR, file), 'utf8');
+              const { data } = matter(raw);
+              return {
+                slug: file.replace(/\.(md|markdown)$/i, ''),
+                tmdb_id: Number(data.tmdb_id) || 0,
+                title: data.title || file.replace(/\.(md|markdown)$/i, ''),
+                videourl: cleanVideoUrl(data.videourl || data.video_url || '') || '',
+                image_url: data.image_url || data.poster_path || '',
+                deskripsi: data.deskripsi || data.overview || '',
+                rating: Number(data.rating) || 0,
+                featured: Boolean(data.featured),
+                createdAt: 0,
+                updatedAt: 0,
+              };
+            } catch {
+              return null;
+            }
+          }).filter(Boolean) as any[];
+        }
+
         const featured = mongoMovies.filter((m) => Boolean(m.featured));
         return await Promise.all(
           featured.map(async (m) => {

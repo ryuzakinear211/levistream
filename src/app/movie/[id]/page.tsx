@@ -344,6 +344,8 @@ export default async function MovieDetailPage({ params }: PageProps) {
               trailerKey={trailerKey}
               homepage={movie.homepage}
               hasCustomVideo={Boolean(movie.customVideoUrl)}
+              rating={movie.vote_average}
+              releaseDate={movie.release_date}
             />
           </div>
         </>
@@ -465,6 +467,8 @@ export default async function MovieDetailPage({ params }: PageProps) {
                     trailerKey={trailerKey}
                     homepage={movie.homepage}
                     hasCustomVideo={Boolean(movie.customVideoUrl)}
+                    rating={movie.vote_average}
+                    releaseDate={movie.release_date}
                   />
                 </div>
               </div>

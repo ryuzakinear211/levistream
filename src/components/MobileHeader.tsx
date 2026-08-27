@@ -137,9 +137,7 @@ export default function MobileHeader({ genres = [] }: MobileHeaderProps) {
         {/* Right: Login / Profile Button FIRST, followed by Search & Hamburger Menu */}
         <div className="flex items-center gap-2 sm:gap-2.5">
           {/* Distinctive Glassmorphic Login / Profile Button beside hamburger icon */}
-          {authStatus === 'initializing' ? (
-            <div className="w-20 h-8 rounded-xl bg-white/[0.08] skeleton" />
-          ) : isLoggedIn && user ? (
+          {isLoggedIn && user ? (
             <Link
               href="/profile"
               className="px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold text-cyan-300 transition-all duration-200 hover:scale-105 active:scale-95 flex items-center gap-1.5"
