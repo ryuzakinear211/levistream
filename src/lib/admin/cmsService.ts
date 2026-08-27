@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import { revalidatePath, revalidateTag } from 'next/cache';
-import { slugify, cleanVideoUrl, extractTmdbIdAndType } from '@/lib/urls';
+import { slugify, cleanVideoUrl, extractTmdbIdAndType, generateSafeContentSlug, isValidVideoUrl } from '@/lib/urls';
 import {
   saveGitHubFile,
   deleteGitHubFile,
@@ -24,6 +24,8 @@ import {
 import {
   getMongoMovies,
   getMongoTVShows,
+  getMongoMovieBySlug,
+  getMongoTVShowBySlug,
   getPaginatedMongoMovies,
   getPaginatedMongoTVShows,
   getMongoContentCounts,
@@ -794,11 +796,36 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
     }
 
     const cleanVideo = cleanVideoUrl(videourl);
-    if (!cleanVideo) {
-      throw new Error('videourl (url_video) is required');
+    if (!cleanVideo || !isValidVideoUrl(cleanVideo)) {
+      throw new Error('URL Video tidak valid. Masukkan format URL yang benar (contoh: https://domain.com/video.mp4 atau https://embed.provider.com/watch/...)');
     }
 
     const tmdbIdNum = parsedId;
+
+    // ─── Duplicate Content Detection for Movie ───
+    const existingMongo = await getMongoMovieBySlug(tmdbIdNum).catch(() => null);
+    if (existingMongo) {
+      throw new Error(
+        `Film dengan TMDB ID "${tmdbIdNum}" sudah ada di database: "${existingMongo.title || existingMongo.slug}". Silakan edit konten yang sudah ada atau gunakan TMDB ID berbeda.`
+      );
+    }
+
+    if (fs.existsSync(VIDEO_DIR)) {
+      const files = fs.readdirSync(VIDEO_DIR).filter((f) => f.endsWith('.md') || f.endsWith('.markdown'));
+      for (const f of files) {
+        try {
+          const raw = fs.readFileSync(path.join(VIDEO_DIR, f), 'utf8');
+          const parsed = matter(raw);
+          if (Number(parsed.data.tmdb_id) === tmdbIdNum) {
+            throw new Error(
+              `Film dengan TMDB ID "${tmdbIdNum}" sudah ada di database: "${parsed.data.title || f}". Silakan edit konten yang sudah ada atau gunakan TMDB ID berbeda.`
+            );
+          }
+        } catch (e: any) {
+          if (e.message?.includes('sudah ada di database')) throw e;
+        }
+      }
+    }
 
     if (!title || !desc || !poster) {
       try {
@@ -812,30 +839,9 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
       } catch {}
     }
 
-    const fileSlug = slug ? slugify(slug) : title ? slugify(title) : `movie-${tmdbIdNum}`;
-
-    let existingFileName: string | null = null;
-    let existingFrontmatter: Record<string, any> = {};
-    try {
-      if (fs.existsSync(VIDEO_DIR)) {
-        const files = fs.readdirSync(VIDEO_DIR).filter((f) => f.endsWith('.md') || f.endsWith('.markdown'));
-        for (const f of files) {
-          const raw = fs.readFileSync(path.join(VIDEO_DIR, f), 'utf8');
-          const parsed = matter(raw);
-          if (
-            Number(parsed.data.tmdb_id) === tmdbIdNum ||
-            f === `${fileSlug}.md` ||
-            (slug && f === `${slugify(slug)}.md`)
-          ) {
-            existingFileName = f;
-            existingFrontmatter = parsed.data;
-            break;
-          }
-        }
-      }
-    } catch {}
-
-    const filename = existingFileName || `${fileSlug}.md`;
+    // Generate safe, non-empty filename (handles non-Latin titles like "我是哪吒")
+    const fileSlug = generateSafeContentSlug(title, tmdbIdNum, 'movie', slug);
+    const filename = `${fileSlug}.md`;
     relativePath = `video/${filename}`;
 
     const frontmatterData: Record<string, any> = {
@@ -844,43 +850,30 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
     };
 
     if (title && title.trim()) frontmatterData.title = title.trim();
-    else if (existingFrontmatter.title) frontmatterData.title = existingFrontmatter.title;
-
     if (desc && desc.trim()) frontmatterData.deskripsi = desc.trim();
-    else if (existingFrontmatter.deskripsi) frontmatterData.deskripsi = existingFrontmatter.deskripsi;
-
     if (poster && poster.trim()) frontmatterData.image_url = poster.trim();
-    else if (existingFrontmatter.image_url) frontmatterData.image_url = existingFrontmatter.image_url;
-
     if (rating !== undefined && rating !== null && rating !== '') frontmatterData.rating = Number(rating);
-    else if (existingFrontmatter.rating !== undefined) frontmatterData.rating = Number(existingFrontmatter.rating);
-
     if (featured !== undefined) frontmatterData.featured = Boolean(featured);
-    else if (existingFrontmatter.featured !== undefined) frontmatterData.featured = Boolean(existingFrontmatter.featured);
-
     if (subtitles && subtitles.trim()) frontmatterData.subtitles = subtitles.trim();
-    else if (existingFrontmatter.subtitles) frontmatterData.subtitles = existingFrontmatter.subtitles;
-
-    if (existingFileName) {
-      isUpdate = true;
-      if (frontmatterData.image_url !== existingFrontmatter.image_url) changedFields.push('Image Poster/Backdrop');
-      if (Boolean(frontmatterData.featured) !== Boolean(existingFrontmatter.featured)) changedFields.push('Status Featured');
-      if (frontmatterData.rating !== existingFrontmatter.rating) changedFields.push('Rating');
-      if (frontmatterData.videourl !== existingFrontmatter.videourl) changedFields.push('URL Video');
-      if (frontmatterData.title && frontmatterData.title !== existingFrontmatter.title) changedFields.push('Judul');
-      if (frontmatterData.deskripsi && frontmatterData.deskripsi !== existingFrontmatter.deskripsi) changedFields.push('Deskripsi');
-      if (frontmatterData.subtitles !== existingFrontmatter.subtitles) changedFields.push('Subtitles');
-      hasChanges = changedFields.length > 0;
-    }
 
     fileContent = serializeTinaMovie(frontmatterData, content || '');
+
+    // Write file locally
+    try {
+      const fullPath = path.join(process.cwd(), relativePath);
+      const dir = path.dirname(fullPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(fullPath, fileContent, 'utf8');
+    } catch (err: any) {
+      console.warn(`[createAdminContent] Error writing file ${relativePath}:`, err);
+    }
 
     // Persist to MongoDB
     try {
       await saveMongoMovie({
-        slug: filename.replace(/\.(md|markdown)$/i, ''),
+        slug: fileSlug,
         tmdb_id: tmdbIdNum,
-        title: frontmatterData.title || filename.replace(/\.(md|markdown)$/i, ''),
+        title: frontmatterData.title || fileSlug,
         videourl: frontmatterData.videourl || '',
         image_url: frontmatterData.image_url || '',
         deskripsi: frontmatterData.deskripsi || '',
@@ -905,6 +898,34 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
 
     const tmdbIdNum = parsedId;
 
+    // ─── Duplicate Content Detection for TV Show ───
+    const existingMongo = await getMongoTVShowBySlug(tmdbIdNum).catch(() => null);
+    if (existingMongo) {
+      throw new Error(
+        `Serial TV dengan TMDB ID "${tmdbIdNum}" sudah ada di database: "${existingMongo.title || existingMongo.showSlug}". Silakan edit serial yang sudah ada atau gunakan TMDB ID berbeda.`
+      );
+    }
+
+    if (fs.existsSync(TV_DIR)) {
+      const shows = fs.readdirSync(TV_DIR, { withFileTypes: true }).filter((d) => d.isDirectory());
+      for (const s of shows) {
+        const indexPath = path.join(TV_DIR, s.name, '_index.md');
+        if (fs.existsSync(indexPath)) {
+          try {
+            const raw = fs.readFileSync(indexPath, 'utf8');
+            const parsed = matter(raw);
+            if (Number(parsed.data.tmdb_id) === tmdbIdNum) {
+              throw new Error(
+                `Serial TV dengan TMDB ID "${tmdbIdNum}" sudah ada di database: "${parsed.data.title || s.name}". Silakan edit serial yang sudah ada atau gunakan TMDB ID berbeda.`
+              );
+            }
+          } catch (e: any) {
+            if (e.message?.includes('sudah ada di database')) throw e;
+          }
+        }
+      }
+    }
+
     if (!title || !desc || !poster) {
       try {
         const tmdb = await getTVShowDetails(tmdbIdNum).catch(() => null);
@@ -917,60 +938,19 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
       } catch {}
     }
 
-    const cleanShowSlug = showSlug ? slugify(showSlug) : title ? slugify(title) : `tv-${tmdbIdNum}`;
-
-    let existingShowSlug = cleanShowSlug;
-    let existingFrontmatter: Record<string, any> = {};
-    let foundExisting = false;
-    try {
-      if (fs.existsSync(TV_DIR)) {
-        const shows = fs.readdirSync(TV_DIR, { withFileTypes: true }).filter((d) => d.isDirectory());
-        for (const s of shows) {
-          const indexPath = path.join(TV_DIR, s.name, '_index.md');
-          if (fs.existsSync(indexPath)) {
-            const raw = fs.readFileSync(indexPath, 'utf8');
-            const parsed = matter(raw);
-            if (Number(parsed.data.tmdb_id) === tmdbIdNum || s.name === cleanShowSlug) {
-              existingShowSlug = s.name;
-              existingFrontmatter = parsed.data;
-              foundExisting = true;
-              break;
-            }
-          }
-        }
-      }
-    } catch {}
-
-    relativePath = `tv/${existingShowSlug}/_index.md`;
+    // Generate safe show slug
+    const cleanShowSlug = generateSafeContentSlug(title, tmdbIdNum, 'tv', showSlug);
+    relativePath = `tv/${cleanShowSlug}/_index.md`;
 
     const frontmatterData: Record<string, any> = {
       tmdb_id: tmdbIdNum,
     };
 
     if (title && title.trim()) frontmatterData.title = title.trim();
-    else if (existingFrontmatter.title) frontmatterData.title = existingFrontmatter.title;
-
     if (desc && desc.trim()) frontmatterData.deskripsi = desc.trim();
-    else if (existingFrontmatter.deskripsi) frontmatterData.deskripsi = existingFrontmatter.deskripsi;
-
     if (poster && poster.trim()) frontmatterData.image_url = poster.trim();
-    else if (existingFrontmatter.image_url) frontmatterData.image_url = existingFrontmatter.image_url;
-
     if (rating !== undefined && rating !== null && rating !== '') frontmatterData.rating = Number(rating);
-    else if (existingFrontmatter.rating !== undefined) frontmatterData.rating = Number(existingFrontmatter.rating);
-
     if (featured !== undefined) frontmatterData.featured = Boolean(featured);
-    else if (existingFrontmatter.featured !== undefined) frontmatterData.featured = Boolean(existingFrontmatter.featured);
-
-    if (foundExisting) {
-      isUpdate = true;
-      if (frontmatterData.image_url !== existingFrontmatter.image_url) changedFields.push('Image Poster/Backdrop');
-      if (Boolean(frontmatterData.featured) !== Boolean(existingFrontmatter.featured)) changedFields.push('Status Featured');
-      if (frontmatterData.rating !== existingFrontmatter.rating) changedFields.push('Rating');
-      if (frontmatterData.title && frontmatterData.title !== existingFrontmatter.title) changedFields.push('Judul');
-      if (frontmatterData.deskripsi && frontmatterData.deskripsi !== existingFrontmatter.deskripsi) changedFields.push('Deskripsi');
-      hasChanges = changedFields.length > 0;
-    }
 
     fileContent = serializeTinaTVShow(frontmatterData, content || '');
 
@@ -1003,7 +983,11 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
           const epCleanVideo = cleanVideoUrl(ep.videourl || ep.video_url || '');
 
           if (epCleanVideo) {
-            const epRelPath = `tv/${existingShowSlug}/${cleanSeason}/${cleanEp}.md`;
+            if (!isValidVideoUrl(epCleanVideo)) {
+              throw new Error(`URL Video untuk Episode ${cleanEp} tidak valid.`);
+            }
+
+            const epRelPath = `tv/${cleanShowSlug}/${cleanSeason}/${cleanEp}.md`;
             const epFrontmatter: Record<string, any> = {
               videourl: epCleanVideo,
             };
@@ -1027,7 +1011,7 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
             }
 
             mongoEpisodesList.push({
-              showSlug: existingShowSlug,
+              showSlug: cleanShowSlug,
               seasonFolder: cleanSeason,
               episode: cleanEp,
               slug: cleanEp,
@@ -1051,9 +1035,9 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
     try {
       await saveMongoTVShow(
         {
-          showSlug: existingShowSlug,
+          showSlug: cleanShowSlug,
           tmdb_id: tmdbIdNum,
-          title: frontmatterData.title || existingShowSlug,
+          title: frontmatterData.title || cleanShowSlug,
           image_url: frontmatterData.image_url || '',
           deskripsi: frontmatterData.deskripsi || '',
           rating: frontmatterData.rating || 0,
@@ -1070,9 +1054,9 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
     return {
       success: true,
       relativePath,
-      isUpdate,
-      hasChanges,
-      changedFields,
+      isUpdate: false,
+      hasChanges: true,
+      changedFields: [],
       savedEpisodesCount,
     };
   } else if (contentType === 'tv_episode') {
@@ -1084,6 +1068,7 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
       title,
       desc,
       poster,
+      image_url,
       rating,
       subtitles,
       duration,
@@ -1092,18 +1077,19 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
 
     if (!showSlug) throw new Error('showSlug is required for TV episode');
     const cleanVideo = cleanVideoUrl(videourl);
-    if (!cleanVideo) throw new Error('videourl (url_video) is required for TV episode');
+    if (!cleanVideo || !isValidVideoUrl(cleanVideo)) {
+      throw new Error('URL Video tidak valid. Masukkan format URL yang benar (contoh: https://domain.com/video.mp4 atau https://embed.provider.com/watch/...)');
+    }
 
     const cleanShowSlug = slugify(showSlug);
     const cleanSeason = season ? slugify(season) : 's1';
     const cleanEp = episode
       ? episode.startsWith('e') || episode.startsWith('ep')
-        ? episode
-        : `e${episode}`
+        ? `e${episode.replace(/\D/g, '') || '1'}`
+        : slugify(episode)
       : 'e1';
-    const filename = `${slugify(cleanEp)}.md`;
 
-    relativePath = `tv/${cleanShowSlug}/${cleanSeason}/${filename}`;
+    relativePath = `tv/${cleanShowSlug}/${cleanSeason}/${cleanEp}.md`;
 
     let foundExistingEp = false;
     let existingFrontmatter: Record<string, any> = {};
@@ -1238,6 +1224,10 @@ export async function updateAdminContent(body: any, ghConfig: GitHubOptions) {
 
   let fileContent = '';
   if (isMovie) {
+    if (cleanFrontmatter.videourl && !isValidVideoUrl(cleanFrontmatter.videourl)) {
+      throw new Error('URL Video tidak valid. Masukkan format URL yang benar (contoh: https://domain.com/video.mp4 atau https://embed.provider.com/watch/...)');
+    }
+
     fileContent = serializeTinaMovie(cleanFrontmatter, content || '');
     const slug = path.basename(relativePath).replace(/\.(md|markdown)$/i, '');
     try {
@@ -1261,18 +1251,24 @@ export async function updateAdminContent(body: any, ghConfig: GitHubOptions) {
     fileContent = serializeTinaTVShow(cleanFrontmatter, content || '');
     const showSlug = relativePath.split('/')[1];
     const mongoEps = Array.isArray(body.episodes)
-      ? body.episodes.map((ep: any) => ({
-          showSlug,
-          seasonFolder: (ep.season || ep.seasonFolder || 's1').toLowerCase(),
-          episode: ep.episode || ep.slug || 'e1',
-          slug: ep.episode || ep.slug || 'e1',
-          title: ep.title,
-          videourl: cleanVideoUrl(ep.videourl || (ep.frontmatter && (ep.frontmatter.videourl || ep.frontmatter.video_url)) || ''),
-          image_url: ep.image_url || (ep.frontmatter && ep.frontmatter.image_url),
-          subtitles: ep.subtitles || (ep.frontmatter && ep.frontmatter.subtitles),
-          duration: ep.duration || (ep.frontmatter && ep.frontmatter.duration),
-          deleted: ep.deleted,
-        }))
+      ? body.episodes.map((ep: any) => {
+          const epVideo = cleanVideoUrl(ep.videourl || (ep.frontmatter && (ep.frontmatter.videourl || ep.frontmatter.video_url)) || '');
+          if (epVideo && !isValidVideoUrl(epVideo)) {
+            throw new Error(`URL Video untuk Episode ${ep.episode || ep.slug || ep.title} tidak valid.`);
+          }
+          return {
+            showSlug,
+            seasonFolder: (ep.season || ep.seasonFolder || 's1').toLowerCase(),
+            episode: ep.episode || ep.slug || 'e1',
+            slug: ep.episode || ep.slug || 'e1',
+            title: ep.title,
+            videourl: epVideo || '',
+            image_url: ep.image_url || (ep.frontmatter && ep.frontmatter.image_url),
+            subtitles: ep.subtitles || (ep.frontmatter && ep.frontmatter.subtitles),
+            duration: ep.duration || (ep.frontmatter && ep.frontmatter.duration),
+            deleted: ep.deleted,
+          };
+        })
       : [];
     try {
       await saveMongoTVShow(
@@ -1293,6 +1289,10 @@ export async function updateAdminContent(body: any, ghConfig: GitHubOptions) {
     }
   } else {
     // Single TV episode update: tv/[showSlug]/[season]/[episode].md
+    if (cleanFrontmatter.videourl && !isValidVideoUrl(cleanFrontmatter.videourl)) {
+      throw new Error('URL Video tidak valid. Masukkan format URL yang benar (contoh: https://domain.com/video.mp4 atau https://embed.provider.com/watch/...)');
+    }
+
     fileContent = serializeTinaTVEpisode(cleanFrontmatter, content || '');
     const parts = relativePath.split('/');
     if (parts.length >= 4) {

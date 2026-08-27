@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { EditingItemState, TMDBPreviewData, TVShowItem } from '../types';
 import { BackdropPicker } from './BackdropPicker';
-import { extractTmdbIdAndType, cleanVideoUrl } from '@/lib/urls';
+import { extractTmdbIdAndType, cleanVideoUrl, isValidVideoUrl } from '@/lib/urls';
 
 interface EditableEpisode {
   id: string;
@@ -118,6 +118,23 @@ export const EditModal: React.FC<EditModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Client-side URL validation
+    if (editingItem.type === 'movie' || editingItem.type === 'tv_episode') {
+      const vid = editingItem.frontmatter.videourl || editingItem.frontmatter.video_url;
+      if (vid && !isValidVideoUrl(vid)) {
+        showToast('Format URL Video tidak valid (contoh: https://domain.com/video.mp4 atau https://embed.provider.com/...)', 'error');
+        return;
+      }
+    } else if (editingItem.type === 'tv_show') {
+      for (const ep of episodesList) {
+        if (ep.videourl && !isValidVideoUrl(ep.videourl)) {
+          showToast(`URL Video untuk ${ep.title || ep.slug} tidak valid.`, 'error');
+          return;
+        }
+      }
+    }
+
     setSubmitting(true);
     try {
       const payload: any = {

@@ -14,6 +14,5 @@ deskripsi: >-
   lalunya!
 image_url: 'https://image.tmdb.org/t/p/w500/bjiS5ipwxb9JFy3XRRN4OAilSeX.jpg'
 rating: 0
-featured: false
 ---
 

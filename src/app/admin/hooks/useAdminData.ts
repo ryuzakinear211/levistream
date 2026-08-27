@@ -231,9 +231,45 @@ export function useAdminData() {
 
   const [syncingGitHub, setSyncingGitHub] = useState(false);
 
+  // Check sync status on server and poll if in progress
+  const pollSyncStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/github-sync', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+
+      if (data.status === 'in_progress') {
+        setSyncingGitHub(true);
+        setTimeout(pollSyncStatus, 1500);
+      } else if (data.status === 'completed') {
+        setSyncingGitHub(false);
+        const lastFinished = data.finishedAt ? Number(data.finishedAt) : 0;
+        const lastNotified = Number(sessionStorage.getItem('last_notified_sync') || '0');
+        if (lastFinished > lastNotified) {
+          sessionStorage.setItem('last_notified_sync', String(lastFinished));
+          showToast(data.message || `Sinkronisasi berhasil! ${data.syncedCount || 0} file dipush ke GitHub.`, 'success');
+          fetchContent({ silent: true });
+        }
+      } else if (data.status === 'error') {
+        setSyncingGitHub(false);
+        const lastFinished = data.finishedAt ? Number(data.finishedAt) : 0;
+        const lastNotified = Number(sessionStorage.getItem('last_notified_sync') || '0');
+        if (lastFinished > lastNotified) {
+          sessionStorage.setItem('last_notified_sync', String(lastFinished));
+          showToast(data.error || 'Gagal menyinkronkan ke GitHub', 'error');
+        }
+      }
+    } catch {}
+  }, [fetchContent, showToast]);
+
+  // Initial check on mount / refresh
+  useEffect(() => {
+    pollSyncStatus();
+  }, [pollSyncStatus]);
+
   const handleManualSyncToGitHub = async () => {
     setSyncingGitHub(true);
-    showToast('Menyinkronkan semua konten ke GitHub...');
+    showToast('Menyinkronkan konten ke GitHub di background server...');
 
     try {
       const res = await fetch('/api/admin/github-sync', {
@@ -243,18 +279,16 @@ export function useAdminData() {
 
       const result = await res.json();
       if (res.ok) {
-        showToast(
-          `Sinkronisasi berhasil! ${result.syncedCount} file dipush ke GitHub.`,
-          'success'
-        );
+        // Start polling server-side progress
+        setTimeout(pollSyncStatus, 1000);
       } else {
+        setSyncingGitHub(false);
         if (result.requiresToken) setIsSettingsOpen(true);
-        showToast(result.error || 'Gagal menyinkronkan ke GitHub', 'error');
+        showToast(result.error || 'Gagal memulai sinkronisasi ke GitHub', 'error');
       }
     } catch {
-      showToast('Koneksi ke API sync gagal', 'error');
-    } finally {
       setSyncingGitHub(false);
+      showToast('Koneksi ke API sync gagal', 'error');
     }
   };
 

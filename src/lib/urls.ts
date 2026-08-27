@@ -2,20 +2,95 @@ import siteConfig from '@/config';
 
 /**
  * Converts a string into a clean, URL-friendly kebab-case slug.
- * E.g. "Deadpool & Wolverine (2024)" -> "deadpool-and-wolverine"
+ * Accents are normalized to base ASCII (e.g. "é" -> "e", "ñ" -> "n").
+ * Symbols like &, +, @ are converted to words.
  */
 export function slugify(text?: string | null): string {
   if (!text) return '';
   return text
     .toString()
+    .normalize('NFD') // decompose accented characters
+    .replace(/[\u0300-\u036f]/g, '') // remove accent marks
     .toLowerCase()
     .trim()
     .replace(/\s*\([^)]*\)/g, '') // remove parenthesized expressions like (2026), (Edition)
     .replace(/&/g, '-and-')
+    .replace(/\+/g, '-plus-')
+    .replace(/@/g, '-at-')
     .replace(/[^a-z0-9\s-]/g, '') // remove non-alphanumeric chars except hyphen & space
     .replace(/\s+/g, '-') // collapse spaces into hyphen
     .replace(/-+/g, '-') // collapse multiple hyphens
     .replace(/^-+|-+$/g, ''); // trim hyphens
+}
+
+/**
+ * Generates a safe, non-empty filename slug for Movie or TV content.
+ * If title contains pure non-Latin characters (like "我是哪吒") that produce an empty slug,
+ * it safely falls back to `${type}-${tmdbId}` (e.g. "movie-123456" or "tv-78910").
+ */
+export function generateSafeContentSlug(
+  title?: string | null,
+  tmdbId?: number | string | null,
+  type: 'movie' | 'tv' = 'movie',
+  customSlug?: string | null
+): string {
+  if (customSlug && customSlug.trim()) {
+    const s = slugify(customSlug);
+    if (s) return s;
+  }
+
+  if (title && title.trim()) {
+    const s = slugify(title);
+    if (s) return s;
+  }
+
+  const cleanId = tmdbId ? String(tmdbId).trim() : '';
+  if (cleanId && /^\d+$/.test(cleanId)) {
+    return `${type}-${cleanId}`;
+  }
+
+  return `${type}-${Date.now()}`;
+}
+
+/**
+ * Validates whether a given string is a valid video stream or embed URL.
+ * Rejects plain text, spaces, or invalid formats.
+ */
+export function isValidVideoUrl(url?: string | null): boolean {
+  if (!url || typeof url !== 'string') return false;
+  const clean = cleanVideoUrl(url);
+  if (!clean) return false;
+
+  // Must not be plain text with spaces
+  if (/\s/.test(clean)) return false;
+
+  // Protocol relative //domain.com/video.mp4
+  if (clean.startsWith('//') && clean.length > 4 && clean.includes('.')) {
+    return true;
+  }
+
+  // Local / static path e.g. /static/video.mp4 or /videos/sample.mp4
+  if (clean.startsWith('/') && !clean.startsWith('//')) {
+    return clean.length > 2 && /\.(mp4|mkv|webm|m3u8|mpd)$/i.test(clean);
+  }
+
+  // Must start with http:// or https://
+  if (!/^https?:\/\//i.test(clean)) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(clean);
+    if (!parsed.hostname || (!parsed.hostname.includes('.') && parsed.hostname !== 'localhost')) {
+      return false;
+    }
+    if (parsed.hostname.length < 3) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -10,6 +10,5 @@ deskripsi: >-
   that the vows she took in life survive even in death.
 image_url: 'https://image.tmdb.org/t/p/w1280/A5Tz6ogGt4VV8NESG9oWVct5bo1.jpg'
 rating: 0
-featured: false
 ---
 

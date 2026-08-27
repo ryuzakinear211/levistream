@@ -10,6 +10,5 @@ deskripsi: >-
   penyihir-dewi Circe.
 image_url: 'https://image.tmdb.org/t/p/w500/5rhTDKUhPYvpdQIijFIs5VoWsON.jpg'
 rating: 0
-featured: false
 ---
 

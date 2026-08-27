@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { DraftSeason, TMDBPreviewData, MovieItem, TVShowItem } from '../types';
 import { BackdropPicker } from './BackdropPicker';
-import { cleanVideoUrl } from '@/lib/urls';
+import { cleanVideoUrl, isValidVideoUrl } from '@/lib/urls';
 
 interface TMDBLiveSearchResult {
   id: number;
@@ -207,12 +207,27 @@ export const CreateModal: React.FC<CreateModalProps> = ({
     const errors: Record<string, string> = {};
     if (contentType === 'movie') {
       if (!formTmdbId) errors.formTmdbId = 'TMDB ID wajib diisi';
-      if (!formVideoUrl) errors.formVideoUrl = 'URL Video wajib diisi';
+      if (!formVideoUrl) {
+        errors.formVideoUrl = 'URL Video wajib diisi';
+      } else if (!isValidVideoUrl(formVideoUrl)) {
+        errors.formVideoUrl = 'Format URL Video tidak valid (contoh: https://domain.com/video.mp4 atau https://embed.provider.com/...)';
+      }
     } else if (contentType === 'tv_show') {
       if (!formTmdbId) errors.formTmdbId = 'TMDB ID wajib diisi';
+      for (const s of formSeasons) {
+        for (const ep of s.episodes) {
+          if (ep.videourl && !isValidVideoUrl(ep.videourl)) {
+            errors[`ep_video_${ep.id}`] = `URL Video untuk ${ep.episode || ep.title} tidak valid`;
+          }
+        }
+      }
     } else if (contentType === 'tv_episode') {
       if (!formTvShowSlug) errors.formTvShowSlug = 'TV Series wajib dipilih';
-      if (!formVideoUrl) errors.formVideoUrl = 'URL Video wajib diisi';
+      if (!formVideoUrl) {
+        errors.formVideoUrl = 'URL Video wajib diisi';
+      } else if (!isValidVideoUrl(formVideoUrl)) {
+        errors.formVideoUrl = 'Format URL Video tidak valid (contoh: https://domain.com/video.mp4)';
+      }
     }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -221,7 +236,7 @@ export const CreateModal: React.FC<CreateModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) {
-      showToast('Mohon lengkapi field yang wajib diisi', 'error');
+      showToast('Mohon perbaiki data input yang tidak valid', 'error');
       return;
     }
 
@@ -234,6 +249,7 @@ export const CreateModal: React.FC<CreateModalProps> = ({
         slug: formSlug,
         videourl: formVideoUrl,
         poster: formPoster,
+        image_url: formPoster,
         desc: formDesc,
         rating: formRating,
         featured: formFeatured,
@@ -835,30 +851,78 @@ export const CreateModal: React.FC<CreateModalProps> = ({
                           )}
                         </div>
 
-                        <div className="flex items-center gap-1.5 bg-black/70 border border-white/10 rounded-lg px-2.5 py-1.5 focus-within:border-cyan-400 min-h-[38px]">
-                          <Play size={12} className="text-cyan-400 flex-shrink-0" />
-                          <input
-                            type="text"
-                            value={ep.videourl}
-                            onChange={(e) =>
-                              setFormSeasons((prev) =>
-                                prev.map((s) =>
-                                  s.id === season.id
-                                    ? {
-                                        ...s,
-                                        episodes: s.episodes.map((item) =>
-                                          item.id === ep.id
-                                            ? { ...item, videourl: e.target.value }
-                                            : item
-                                        ),
-                                      }
-                                    : s
-                                )
-                              )
-                            }
-                            placeholder="URL Video stream (MP4 / .m3u8)..."
-                            className="w-full bg-transparent text-xs text-white font-mono focus:outline-none"
-                          />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <div className="flex items-center gap-1.5 bg-black/70 border border-white/10 rounded-lg px-2.5 py-1.5 focus-within:border-cyan-400 min-h-[38px]">
+                              <Play size={12} className="text-cyan-400 flex-shrink-0" />
+                              <input
+                                type="text"
+                                value={ep.videourl}
+                                onChange={(e) =>
+                                  setFormSeasons((prev) =>
+                                    prev.map((s) =>
+                                      s.id === season.id
+                                        ? {
+                                            ...s,
+                                            episodes: s.episodes.map((item) =>
+                                              item.id === ep.id
+                                                ? { ...item, videourl: e.target.value }
+                                                : item
+                                            ),
+                                          }
+                                        : s
+                                    )
+                                  )
+                                }
+                                placeholder="URL Video stream (MP4 / .m3u8)..."
+                                className="w-full bg-transparent text-xs text-white font-mono focus:outline-none"
+                              />
+                            </div>
+                            {formErrors[`ep_video_${ep.id}`] && (
+                              <p className="text-[10px] text-red-400 mt-0.5">{formErrors[`ep_video_${ep.id}`]}</p>
+                            )}
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-1.5 bg-black/70 border border-white/10 rounded-lg px-2.5 py-1.5 focus-within:border-pink-400 min-h-[38px]">
+                              <ImageIcon size={12} className="text-pink-400 flex-shrink-0" />
+                              <input
+                                type="text"
+                                value={ep.image_url || ''}
+                                onChange={(e) =>
+                                  setFormSeasons((prev) =>
+                                    prev.map((s) =>
+                                      s.id === season.id
+                                        ? {
+                                            ...s,
+                                            episodes: s.episodes.map((item) =>
+                                              item.id === ep.id
+                                                ? { ...item, image_url: e.target.value }
+                                                : item
+                                            ),
+                                          }
+                                        : s
+                                    )
+                                  )
+                                }
+                                placeholder="Image URL / Thumbnail..."
+                                className="w-full bg-transparent text-xs text-white focus:outline-none"
+                              />
+                              {tmdbPreview?.backdrops && tmdbPreview.backdrops.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveEpisodeDraftId(ep.id);
+                                    setShowBackdropPicker(true);
+                                  }}
+                                  className="text-[10px] font-bold text-pink-400 hover:text-pink-300 whitespace-nowrap"
+                                  title="Pilih gambar dari backdrop TMDB"
+                                >
+                                  TMDB
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}
