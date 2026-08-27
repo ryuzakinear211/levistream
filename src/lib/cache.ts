@@ -103,14 +103,9 @@ class MemoryCache {
    * Invalidates specific cache key or all keys starting with prefix.
    */
   invalidate(keyOrPrefix: string): void {
-    if (this.store.has(keyOrPrefix)) {
-      this.store.delete(keyOrPrefix);
-      return;
-    }
-
-    // Invalidate prefix
-    for (const key of Array.from(this.store.keys())) {
-      if (key.startsWith(keyOrPrefix)) {
+    const keys = Array.from(this.store.keys());
+    for (const key of keys) {
+      if (key === keyOrPrefix || key.startsWith(keyOrPrefix)) {
         this.store.delete(key);
       }
     }
@@ -131,7 +126,11 @@ class MemoryCache {
   }
 }
 
-// Global Singleton Memory Cache instance
-export const memoryCache = new MemoryCache();
+// Global Singleton Memory Cache instance shared across all Next.js bundles
+declare global {
+  var _memoryCacheInstance: MemoryCache | undefined;
+}
+
+export const memoryCache = global._memoryCacheInstance || (global._memoryCacheInstance = new MemoryCache());
 
 export default memoryCache;

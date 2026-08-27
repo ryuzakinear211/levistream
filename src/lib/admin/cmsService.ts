@@ -58,11 +58,13 @@ export function getGitHubConfigFromRequest(req: Request): GitHubOptions {
  */
 export function selectiveRevalidateAll() {
   try {
-    // 1. Invalidate only local markdown & featured caches (keep TMDB caches warm)
+    // 1. Invalidate only local markdown, mongo, admin & featured caches
     memoryCache.invalidate('markdown_');
     memoryCache.invalidate('featured_');
     memoryCache.invalidate('content_provider_');
     memoryCache.invalidate('cms_');
+    memoryCache.invalidate('mongo_');
+    memoryCache.invalidate('admin_');
 
     // 2. Invalidate content provider in-memory registry
     try {
@@ -96,16 +98,19 @@ export function selectiveRevalidateAll() {
  * Fetch all movies and TV shows for Admin Dashboard
  */
 export async function fetchAllAdminContent(ghConfig: GitHubOptions) {
-  ensureDirectories();
-  const isLocal = !process.env.VERCEL && process.env.NODE_ENV !== 'production';
+  return memoryCache.getOrFetch(
+    'admin_all_content',
+    async () => {
+      ensureDirectories();
+      const isLocal = !process.env.VERCEL && process.env.NODE_ENV !== 'production';
 
-  const localMoviesMap = new Map<string, any>();
-  const localTvShowsMap = new Map<string, any>();
+      const localMoviesMap = new Map<string, any>();
+      const localTvShowsMap = new Map<string, any>();
 
-  // 1. Fetch from MongoDB (Persistent Cloud Database)
-  try {
-    const mongoMovies = await getMongoMovies();
-    const mongoShows = await getMongoTVShows();
+      // 1. Fetch from MongoDB (Persistent Cloud Database)
+      try {
+        const mongoMovies = await getMongoMovies();
+        const mongoShows = await getMongoTVShows();
 
     for (const m of mongoMovies) {
       const rel = `video/${m.slug}.md`;
@@ -411,14 +416,18 @@ export async function fetchAllAdminContent(ghConfig: GitHubOptions) {
 
   tvShows.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
-  return {
-    movies,
-    tvShows,
-    isLocal,
-    defaultOwner: process.env.GITHUB_OWNER || 'genstava789',
-    defaultRepo: process.env.GITHUB_REPO || 'filmes',
-    defaultBranch: process.env.GITHUB_BRANCH || 'main',
-  };
+    return {
+      movies,
+      tvShows,
+      isLocal,
+      defaultOwner: process.env.GITHUB_OWNER || 'genstava789',
+      defaultRepo: process.env.GITHUB_REPO || 'filmes',
+      defaultBranch: process.env.GITHUB_BRANCH || 'main',
+    };
+  },
+  300_000, // 5 min TTL
+  30_000   // 30s SWR
+  );
 }
 
 /**

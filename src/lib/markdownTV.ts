@@ -890,3 +890,33 @@ export async function getAllFeaturedCustomTV(): Promise<FeaturedItem[]> {
 
   return results.filter((item): item is FeaturedItem => item !== null);
 }
+
+/**
+ * Returns all custom TV shows formatted as TVShow objects for display in homepage rows and grids.
+ */
+export async function getAllCustomTVShowsForList(): Promise<any[]> {
+  try {
+    const mongoShows = await getMongoTVShows();
+    return mongoShows.map((s) => {
+      const poster = s.image_url || null;
+      return {
+        id: s.tmdb_id || s.showSlug,
+        name: s.title || s.showSlug,
+        overview: s.deskripsi || '',
+        poster_path: poster,
+        backdrop_path: poster,
+        first_air_date: '2026-01-01',
+        vote_average: s.rating || 0,
+        vote_count: 0,
+        genre_ids: [],
+        popularity: 100,
+        isCustomTV: true,
+        customSlug: s.showSlug,
+        customImageUrl: s.image_url,
+      };
+    });
+  } catch (err) {
+    console.warn('[markdownTV] getAllCustomTVShowsForList error:', err);
+    return [];
+  }
+}

@@ -11,7 +11,7 @@ import {
   getTVGenres,
   getGenres,
 } from '@/lib/tmdb';
-import { getAllFeaturedCustomTV } from '@/lib/markdownTV';
+import { getAllFeaturedCustomTV, getAllCustomTVShowsForList } from '@/lib/markdownTV';
 import siteConfig from '@/config';
 
 export const metadata: Metadata = {
@@ -29,6 +29,7 @@ export default async function TVPage() {
     airingData,
     genresData,
     customFeaturedData,
+    customTVListData,
   ] = await Promise.allSettled([
     getTrendingTV('week'),
     getPopularTV(1),
@@ -36,6 +37,7 @@ export default async function TVPage() {
     getAiringTodayTV(1),
     getTVGenres().catch(() => getGenres()),
     getAllFeaturedCustomTV(),
+    getAllCustomTVShowsForList(),
   ]);
 
   const trending = trendingData.status === 'fulfilled' ? trendingData.value.results : [];
@@ -44,6 +46,16 @@ export default async function TVPage() {
   const airingToday = airingData.status === 'fulfilled' ? airingData.value.results : [];
   const genreList = genresData.status === 'fulfilled' ? genresData.value : [];
   const customFeaturedShows = customFeaturedData.status === 'fulfilled' ? customFeaturedData.value : [];
+  const customTVList = customTVListData.status === 'fulfilled' ? customTVListData.value : [];
+
+  const mergedTrending = [
+    ...customTVList,
+    ...trending.filter((t: any) => !customTVList.some((ct: any) => ct.id === t.id || ct.customSlug === String(t.id))),
+  ];
+  const mergedRecentlyAdded = [
+    ...customTVList,
+    ...airingToday.filter((t: any) => !customTVList.some((ct: any) => ct.id === t.id || ct.customSlug === String(t.id))),
+  ];
 
   const featuredShow = trending[0] || popular[0];
 
@@ -76,19 +88,19 @@ export default async function TVPage() {
         )}
 
         {/* Trending TV (no see all) */}
-        {trending.length > 0 && (
+        {mergedTrending.length > 0 && (
           <MovieRow
             title={siteConfig.tvSections?.trending || 'Trending This Week'}
-            items={trending}
+            items={mergedTrending}
             type="tv"
           />
         )}
 
         {/* Recently Added Series */}
-        {airingToday.length > 0 && (
+        {mergedRecentlyAdded.length > 0 && (
           <MovieRow
             title={siteConfig.tvSections?.recentlyAdded || 'Recently Added'}
-            items={airingToday}
+            items={mergedRecentlyAdded}
             seeAllHref="/tv/browse?sort=first_air_date.desc"
             type="tv"
           />

@@ -3,9 +3,9 @@ import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import { slugify, cleanVideoUrl } from '@/lib/urls';
-import { getImageUrl } from '@/lib/tmdb';
 import { serializeTinaMovie, serializeTinaTVShow, serializeTinaTVEpisode } from '@/lib/tina/schema';
-import { saveGitHubFile, deleteGitHubFile, GitHubOptions } from '@/lib/githubStorage';
+import { saveGitHubFile, GitHubOptions } from '@/lib/githubStorage';
+import { memoryCache } from '@/lib/cache';
 
 export interface MongoMovie {
   _id?: any;
@@ -62,52 +62,58 @@ const TV_SHOWS_COLLECTION = 'tv_shows';
 const EPISODES_COLLECTION = 'tv_episodes';
 
 /**
- * Ensure MongoDB collections and indexes are ready
+ * Direct collection references without index overhead on every call
  */
-async function getCollections() {
+async function getCollectionsRaw() {
   const db = await getDatabase();
   const movies = db.collection<MongoMovie>(MOVIES_COLLECTION);
   const tvShows = db.collection<MongoTVShow>(TV_SHOWS_COLLECTION);
   const episodes = db.collection<MongoTVEpisode>(EPISODES_COLLECTION);
-
-  // Setup unique indexes
-  try {
-    await movies.createIndex({ slug: 1 }, { unique: true });
-    await movies.createIndex({ tmdb_id: 1 });
-    await tvShows.createIndex({ showSlug: 1 }, { unique: true });
-    await tvShows.createIndex({ tmdb_id: 1 });
-    await episodes.createIndex(
-      { showSlug: 1, seasonFolder: 1, episode: 1 },
-      { unique: true }
-    );
-  } catch {}
-
   return { movies, tvShows, episodes };
 }
 
-/**
- * Auto-seeds MongoDB from local markdown files on startup if MongoDB is empty
- */
-export async function autoSeedMongoDBIfEmpty() {
-  try {
-    const { movies, tvShows, episodes } = await getCollections();
-    const movieCount = await movies.countDocuments();
-    const showCount = await tvShows.countDocuments();
+// Global initialization lock so index/seed runs only once in background
+let isInitialized = false;
 
-    if (movieCount > 0 || showCount > 0) {
-      return; // Already populated
+function ensureInitialized() {
+  if (isInitialized) return;
+  isInitialized = true;
+
+  // Run in background without blocking current request
+  (async () => {
+    try {
+      const { movies, tvShows, episodes } = await getCollectionsRaw();
+      await Promise.allSettled([
+        movies.createIndex({ slug: 1 }, { unique: true }),
+        movies.createIndex({ tmdb_id: 1 }),
+        tvShows.createIndex({ showSlug: 1 }, { unique: true }),
+        tvShows.createIndex({ tmdb_id: 1 }),
+        episodes.createIndex({ showSlug: 1, seasonFolder: 1, episode: 1 }, { unique: true }),
+      ]);
+
+      const movieCount = await movies.countDocuments();
+      const showCount = await tvShows.countDocuments();
+
+      if (movieCount === 0 && showCount === 0) {
+        await seedFromMarkdownFiles(movies, tvShows, episodes);
+      }
+    } catch (e) {
+      console.warn('[MongoDB] Init notice:', e);
     }
+  })();
+}
 
-    console.log('[MongoDB] Database is empty. Seeding initial data from markdown files...');
-
+/**
+ * Seeds initial markdown files into MongoDB
+ */
+async function seedFromMarkdownFiles(movies: any, tvShows: any, episodes: any) {
+  try {
+    console.log('[MongoDB] Seeding initial data from markdown files...');
     const VIDEO_DIR = path.join(process.cwd(), 'video');
     const TV_DIR = path.join(process.cwd(), 'tv');
 
-    // Seed Movies
     if (fs.existsSync(VIDEO_DIR)) {
-      const files = fs
-        .readdirSync(VIDEO_DIR)
-        .filter((f) => f.endsWith('.md') || f.endsWith('.markdown'));
+      const files = fs.readdirSync(VIDEO_DIR).filter((f) => f.endsWith('.md') || f.endsWith('.markdown'));
       for (const file of files) {
         try {
           const raw = fs.readFileSync(path.join(VIDEO_DIR, file), 'utf8');
@@ -133,7 +139,6 @@ export async function autoSeedMongoDBIfEmpty() {
       }
     }
 
-    // Seed TV Shows & Episodes
     if (fs.existsSync(TV_DIR)) {
       const showDirs = fs
         .readdirSync(TV_DIR, { withFileTypes: true })
@@ -172,7 +177,6 @@ export async function autoSeedMongoDBIfEmpty() {
         };
         await tvShows.updateOne({ showSlug: showDir }, { $set: showDoc }, { upsert: true });
 
-        // Episodes
         const entries = fs.readdirSync(showPath, { withFileTypes: true });
         for (const entry of entries) {
           if (entry.name === '_index.md' || entry.name === 'index.md') continue;
@@ -180,9 +184,7 @@ export async function autoSeedMongoDBIfEmpty() {
           if (entry.isDirectory()) {
             const seasonFolder = entry.name;
             const seasonPath = path.join(showPath, seasonFolder);
-            const epFiles = fs
-              .readdirSync(seasonPath)
-              .filter((f) => f.endsWith('.md') || f.endsWith('.markdown'));
+            const epFiles = fs.readdirSync(seasonPath).filter((f) => f.endsWith('.md') || f.endsWith('.markdown'));
 
             for (const epFile of epFiles) {
               const raw = fs.readFileSync(path.join(seasonPath, epFile), 'utf8');
@@ -241,32 +243,61 @@ export async function autoSeedMongoDBIfEmpty() {
     }
     console.log('[MongoDB] Seeding complete.');
   } catch (err) {
-    console.warn('[MongoDB] Auto-seed warning:', err);
+    console.warn('[MongoDB] Seeding warning:', err);
   }
 }
 
+export async function autoSeedMongoDBIfEmpty() {
+  ensureInitialized();
+}
+
+function invalidateAllMongoCaches() {
+  memoryCache.invalidate('mongo_');
+  memoryCache.invalidate('markdown_');
+  memoryCache.invalidate('featured_');
+  memoryCache.invalidate('content_provider_');
+  memoryCache.invalidate('admin_');
+}
+
 // ──────────────────────────────────────────
-// MOVIE CRUD OPERATIONS
+// MOVIE CRUD OPERATIONS (CACHED WITH SWR)
 // ──────────────────────────────────────────
 
 export async function getMongoMovies(): Promise<MongoMovie[]> {
-  try {
-    await autoSeedMongoDBIfEmpty();
-    const { movies } = await getCollections();
-    return await movies.find({}).sort({ updatedAt: -1 }).toArray();
-  } catch (err) {
-    console.warn('[MongoDB] getMongoMovies error:', err);
-    return [];
-  }
+  ensureInitialized();
+  return memoryCache.getOrFetch<MongoMovie[]>(
+    'mongo_all_movies',
+    async () => {
+      try {
+        const { movies } = await getCollectionsRaw();
+        return await movies.find({}).sort({ updatedAt: -1 }).toArray();
+      } catch (err) {
+        console.warn('[MongoDB] getMongoMovies error:', err);
+        return [];
+      }
+    },
+    300_000, // 5 min TTL
+    30_000   // 30s SWR
+  );
 }
 
 export async function getMongoMovieBySlug(slugOrId: string | number): Promise<MongoMovie | null> {
+  const allMovies = await getMongoMovies();
+  const key = String(slugOrId).trim().toLowerCase();
+  const idNum = Number(slugOrId);
+
+  // Fast In-Memory RAM search (0.01ms)
+  const found = allMovies.find(
+    (m) => m.slug.toLowerCase() === key || (!isNaN(idNum) && m.tmdb_id === idNum)
+  );
+  if (found) return found;
+
+  // Direct database query fallback
   try {
-    await autoSeedMongoDBIfEmpty();
-    const { movies } = await getCollections();
-    const query = isNaN(Number(slugOrId))
-      ? { slug: String(slugOrId).toLowerCase() }
-      : { $or: [{ slug: String(slugOrId).toLowerCase() }, { tmdb_id: Number(slugOrId) }] };
+    const { movies } = await getCollectionsRaw();
+    const query = isNaN(idNum)
+      ? { slug: key }
+      : { $or: [{ slug: key }, { tmdb_id: idNum }] };
     return await movies.findOne(query as any);
   } catch (err) {
     console.warn('[MongoDB] getMongoMovieBySlug error:', err);
@@ -275,7 +306,7 @@ export async function getMongoMovieBySlug(slugOrId: string | number): Promise<Mo
 }
 
 export async function saveMongoMovie(data: Partial<MongoMovie>): Promise<MongoMovie> {
-  const { movies } = await getCollections();
+  const { movies } = await getCollectionsRaw();
   const slug = data.slug || (data.title ? slugify(data.title) : `movie-${data.tmdb_id}`);
   const now = Date.now();
 
@@ -296,46 +327,68 @@ export async function saveMongoMovie(data: Partial<MongoMovie>): Promise<MongoMo
   };
 
   await movies.updateOne({ slug }, { $set: doc }, { upsert: true });
+  invalidateAllMongoCaches();
   return doc;
 }
 
 export async function deleteMongoMovie(slug: string): Promise<boolean> {
-  const { movies } = await getCollections();
+  const { movies } = await getCollectionsRaw();
   const res = await movies.deleteOne({ slug });
+  invalidateAllMongoCaches();
   return res.deletedCount > 0;
 }
 
 // ──────────────────────────────────────────
-// TV SHOW & EPISODE CRUD OPERATIONS
+// TV SHOW & EPISODE CRUD OPERATIONS (CACHED WITH SWR)
 // ──────────────────────────────────────────
 
 export async function getMongoTVShows(): Promise<(MongoTVShow & { episodes: MongoTVEpisode[] })[]> {
-  try {
-    await autoSeedMongoDBIfEmpty();
-    const { tvShows, episodes } = await getCollections();
-    const shows = await tvShows.find({}).sort({ updatedAt: -1 }).toArray();
-    const allEpisodes = await episodes.find({}).toArray();
+  ensureInitialized();
+  return memoryCache.getOrFetch<(MongoTVShow & { episodes: MongoTVEpisode[] })[]>(
+    'mongo_all_tv_shows',
+    async () => {
+      try {
+        const { tvShows, episodes } = await getCollectionsRaw();
+        const shows = await tvShows.find({}).sort({ updatedAt: -1 }).toArray();
+        const allEpisodes = await episodes.find({}).toArray();
 
-    return shows.map((s) => ({
-      ...s,
-      episodes: allEpisodes.filter((ep) => ep.showSlug === s.showSlug),
-    }));
-  } catch (err) {
-    console.warn('[MongoDB] getMongoTVShows error:', err);
-    return [];
-  }
+        return shows.map((s) => ({
+          ...s,
+          episodes: allEpisodes.filter((ep) => ep.showSlug === s.showSlug),
+        }));
+      } catch (err) {
+        console.warn('[MongoDB] getMongoTVShows error:', err);
+        return [];
+      }
+    },
+    300_000, // 5 min TTL
+    30_000   // 30s SWR
+  );
 }
 
 export async function getMongoTVShowBySlug(
-  showSlug: string
+  showSlugOrId: string | number
 ): Promise<(MongoTVShow & { episodes: MongoTVEpisode[] }) | null> {
+  const allShows = await getMongoTVShows();
+  const key = String(showSlugOrId).trim().toLowerCase();
+  const idNum = Number(showSlugOrId);
+
+  // Fast In-Memory RAM search (0.01ms)
+  const found = allShows.find(
+    (s) => s.showSlug.toLowerCase() === key || (!isNaN(idNum) && s.tmdb_id === idNum)
+  );
+  if (found) return found;
+
+  // Direct database query fallback
   try {
-    await autoSeedMongoDBIfEmpty();
-    const { tvShows, episodes } = await getCollections();
-    const show = await tvShows.findOne({ showSlug: showSlug.toLowerCase() });
+    const { tvShows, episodes } = await getCollectionsRaw();
+    const query = isNaN(idNum)
+      ? { showSlug: key }
+      : { $or: [{ showSlug: key }, { tmdb_id: idNum }] };
+    const show = await tvShows.findOne(query as any);
     if (!show) return null;
 
-    const eps = await episodes.find({ showSlug: showSlug.toLowerCase() }).toArray();
+    const eps = await episodes.find({ showSlug: show.showSlug }).toArray();
     return {
       ...show,
       episodes: eps,
@@ -350,7 +403,7 @@ export async function saveMongoTVShow(
   data: Partial<MongoTVShow>,
   episodesList: Partial<MongoTVEpisode>[] = []
 ): Promise<MongoTVShow> {
-  const { tvShows, episodes } = await getCollections();
+  const { tvShows, episodes } = await getCollectionsRaw();
   const showSlug = data.showSlug || (data.title ? slugify(data.title) : `tv-${data.tmdb_id}`);
   const now = Date.now();
 
@@ -408,13 +461,15 @@ export async function saveMongoTVShow(
     );
   }
 
+  invalidateAllMongoCaches();
   return showDoc;
 }
 
 export async function deleteMongoTVShow(showSlug: string): Promise<boolean> {
-  const { tvShows, episodes } = await getCollections();
+  const { tvShows, episodes } = await getCollectionsRaw();
   await episodes.deleteMany({ showSlug });
   const res = await tvShows.deleteOne({ showSlug });
+  invalidateAllMongoCaches();
   return res.deletedCount > 0;
 }
 

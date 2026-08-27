@@ -649,3 +649,36 @@ export async function getAllFeaturedCustomMovies(): Promise<FeaturedItem[]> {
 
   return results.filter((item): item is FeaturedItem => item !== null);
 }
+
+/**
+ * Returns all custom movies formatted as Movie objects for display in homepage rows and grids.
+ */
+export async function getAllCustomMoviesForList(): Promise<any[]> {
+  try {
+    const mongoMovies = await getMongoMovies();
+    return mongoMovies.map((m) => {
+      const poster = m.image_url || null;
+      return {
+        id: m.tmdb_id || m.slug,
+        title: m.title || m.slug,
+        overview: m.deskripsi || '',
+        poster_path: poster,
+        backdrop_path: poster,
+        release_date: '2026-01-01',
+        vote_average: m.rating || 0,
+        vote_count: 0,
+        genre_ids: [],
+        popularity: 100,
+        adult: false,
+        video: false,
+        isCustomMarkdown: true,
+        customSlug: m.slug,
+        customVideoUrl: m.videourl,
+        customImageUrl: m.image_url,
+      };
+    });
+  } catch (err) {
+    console.warn('[markdownMovies] getAllCustomMoviesForList error:', err);
+    return [];
+  }
+}

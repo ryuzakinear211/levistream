@@ -11,6 +11,8 @@ import {
   getGenres,
 } from '@/lib/tmdb';
 import { getEnrichedFeaturedItems } from '@/lib/featured';
+import { getAllCustomMoviesForList } from '@/lib/markdownMovies';
+import { getAllCustomTVShowsForList } from '@/lib/markdownTV';
 import siteConfig from '@/config';
 
 export const revalidate = 3600;
@@ -23,6 +25,8 @@ export default async function HomePage() {
     topRatedData,
     trendingTVData,
     genres,
+    customMoviesData,
+    customTVData,
   ] = await Promise.allSettled([
     getTrending('movie', 'week'),
     getPopularMovies(1),
@@ -30,6 +34,8 @@ export default async function HomePage() {
     getTopRatedMovies(1),
     getTrendingTV('week'),
     getGenres(),
+    getAllCustomMoviesForList(),
+    getAllCustomTVShowsForList(),
   ]);
 
   const trending = trendingData.status === 'fulfilled' ? trendingData.value.results : [];
@@ -38,6 +44,18 @@ export default async function HomePage() {
   const topRated = topRatedData.status === 'fulfilled' ? topRatedData.value.results : [];
   const trendingTV = trendingTVData.status === 'fulfilled' ? trendingTVData.value.results : [];
   const genreList = genres.status === 'fulfilled' ? genres.value : [];
+  const customMovies = customMoviesData.status === 'fulfilled' ? customMoviesData.value : [];
+  const customTV = customTVData.status === 'fulfilled' ? customTVData.value : [];
+
+  // Merge custom CMS content at the beginning so newly added items show up instantly
+  const mergedNowPlaying = [
+    ...customMovies,
+    ...nowPlaying.filter((m: any) => !customMovies.some((cm: any) => cm.id === m.id || cm.customSlug === String(m.id))),
+  ];
+  const mergedTrendingTV = [
+    ...customTV,
+    ...trendingTV.filter((t: any) => !customTV.some((ct: any) => ct.id === t.id || ct.customSlug === String(t.id))),
+  ];
 
   // Enriched, deduplicated featured items with API fallback & custom page priority
   const featuredItems = await getEnrichedFeaturedItems({
@@ -78,11 +96,11 @@ export default async function HomePage() {
           />
         )}
 
-        {/* Recently Added Movies */}
-        {nowPlaying.length > 0 && (
+        {/* Recently Added Movies (with Custom Movies prepended) */}
+        {mergedNowPlaying.length > 0 && (
           <MovieRow
             title={siteConfig.homepageSections?.recentlyAdded || 'Recently Added'}
-            items={nowPlaying}
+            items={mergedNowPlaying}
             seeAllHref="/movie?sort=release_date.desc"
             type="movie"
           />
@@ -109,10 +127,10 @@ export default async function HomePage() {
         )}
 
         {/* Trending TV (no see all) */}
-        {trendingTV.length > 0 && (
+        {mergedTrendingTV.length > 0 && (
           <MovieRow
             title={siteConfig.homepageSections?.trendingTV || 'Trending TV Shows'}
-            items={trendingTV}
+            items={mergedTrendingTV}
             type="tv"
           />
         )}
