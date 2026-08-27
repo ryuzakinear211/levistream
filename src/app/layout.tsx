@@ -54,6 +54,12 @@ export default async function RootLayout({
 
   return (
     <html lang="en" className={`${plusJakartaSans.variable} ${plusJakartaSans.className}`}>
+      <head>
+        <link rel="preconnect" href="https://image.tmdb.org" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://image.tmdb.org" />
+        <link rel="preconnect" href="https://api.themoviedb.org" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://api.themoviedb.org" />
+      </head>
       <body
         style={{
           backgroundColor: '#050816',

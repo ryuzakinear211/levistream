@@ -20,7 +20,6 @@ function isMovie(item: Movie | TVShow): item is Movie {
 
 export default function MovieCard({ item, type = 'movie', priority = false }: MovieCardProps) {
   const [imgError, setImgError] = useState(false);
-  const [isImgLoaded, setIsImgLoaded] = useState(false);
 
   const title = isMovie(item) ? item.title : item.name;
   const date = isMovie(item) ? item.release_date : item.first_air_date;
@@ -39,23 +38,18 @@ export default function MovieCard({ item, type = 'movie', priority = false }: Mo
     >
       {/* ── Poster Wrapper ── */}
       <div className="relative aspect-[2/3] w-full rounded-xl sm:rounded-2xl overflow-hidden bg-[#0c1224] border border-white/10 shadow-md group-hover:shadow-xl transition-all duration-300 transform group-hover:-translate-y-1.5">
-        {/* Skeleton shimmer placeholder while image loads */}
-        {!isImgLoaded && !imgError && (
-          <div className="absolute inset-0 skeleton bg-white/[0.08] z-0" />
-        )}
+        {/* Background placeholder */}
+        <div className="absolute inset-0 bg-white/[0.04]" />
 
-        {/* Poster Image */}
+        {/* Poster Image - Direct from TMDB Cloudflare CDN */}
         {imagePath && !imgError ? (
-          <Image
+          <img
+            key={posterUrl}
             src={posterUrl}
             alt={title || 'Movie Poster'}
-            fill
-            priority={priority}
-            className={`object-cover transition-all duration-300 ease-out group-hover:scale-105 ${
-              isImgLoaded ? 'opacity-100' : 'opacity-0'
-            }`}
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-            onLoad={() => setIsImgLoaded(true)}
+            loading={priority ? 'eager' : 'lazy'}
+            decoding="async"
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
             onError={() => setImgError(true)}
           />
         ) : (

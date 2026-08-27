@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Optimasi image — whitelist domain TMDB
+  // Direct CDN loading to eliminate Vercel transformation usage and buffering latency
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',

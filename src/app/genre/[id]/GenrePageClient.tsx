@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { Movie, TVShow, Genre } from '@/types/tmdb';
-import { getMoviesByGenre, getTVShowsByGenre } from '@/lib/tmdb';
+import { getMoviesByGenre, getTVShowsByGenre, prefetchImages } from '@/lib/tmdb';
 import MovieCard, { MovieCardSkeleton } from '@/components/MovieCard';
 import GenreFilter from '@/components/GenreFilter';
 
@@ -20,12 +20,21 @@ interface GenrePageClientProps {
   type?: 'movie' | 'tv';
 }
 
-const SORT_OPTIONS = [
+const genreClientCache = new Map<string, any>();
+
+const MOVIE_SORT_OPTIONS = [
   { value: 'popularity.desc', label: 'Most Popular' },
   { value: 'vote_average.desc', label: 'Top Rated' },
   { value: 'release_date.desc', label: 'Newest First' },
   { value: 'release_date.asc', label: 'Oldest First' },
   { value: 'revenue.desc', label: 'Highest Revenue' },
+];
+
+const TV_SORT_OPTIONS = [
+  { value: 'popularity.desc', label: 'Most Popular' },
+  { value: 'vote_average.desc', label: 'Top Rated' },
+  { value: 'first_air_date.desc', label: 'Newest First' },
+  { value: 'first_air_date.asc', label: 'Oldest First' },
 ];
 
 export default function GenrePageClient({
@@ -41,16 +50,55 @@ export default function GenrePageClient({
 }: GenrePageClientProps) {
   const router = useRouter();
   const isTV = type === 'tv';
+  const sortOptions = isTV ? TV_SORT_OPTIONS : MOVIE_SORT_OPTIONS;
+
+  // Normalize initial sort based on media type
+  const normalizedInitialSort = React.useMemo(() => {
+    if (isTV && (initialSort === 'release_date.desc' || initialSort === 'revenue.desc')) {
+      return 'first_air_date.desc';
+    }
+    if (!isTV && initialSort === 'first_air_date.desc') {
+      return 'release_date.desc';
+    }
+    return initialSort;
+  }, [isTV, initialSort]);
+
   const [items, setItems] = useState<(Movie | TVShow)[]>(initialItems);
   const [page, setPage] = useState(initialPage);
-  const [sort, setSort] = useState(initialSort);
-  const [totalPages, setTotalPages] = useState(initialTotalPages);
+  const [sort, setSort] = useState(normalizedInitialSort);
+  const [totalPages, setTotalPages] = useState(Math.min(initialTotalPages, 500));
   const [totalResults, setTotalResults] = useState(initialTotalResults);
   const [loading, setLoading] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
 
   useEffect(() => {
-    if (page === initialPage && sort === initialSort) return;
+    if (page === initialPage && sort === normalizedInitialSort && items.length > 0) return;
+    
+    const cacheKey = `${type}_${genreId}_${page}_${sort}`;
+    if (genreClientCache.has(cacheKey)) {
+      const cached = genreClientCache.get(cacheKey);
+      setItems(cached.results);
+      setTotalPages(Math.min(cached.total_pages, 500));
+      setTotalResults(cached.total_results);
+      setLoading(false);
+
+      // Background prefetch next page
+      const nextPage = page + 1;
+      if (nextPage <= Math.min(cached.total_pages, 500)) {
+        const nextKey = `${type}_${genreId}_${nextPage}_${sort}`;
+        if (!genreClientCache.has(nextKey)) {
+          const fetcher = isTV
+            ? getTVShowsByGenre(genreId, nextPage, sort)
+            : getMoviesByGenre(genreId, nextPage, sort);
+          fetcher.then((nextData) => {
+            genreClientCache.set(nextKey, nextData);
+            prefetchImages(nextData.results);
+          }).catch(() => {});
+        }
+      }
+      return;
+    }
+
     setLoading(true);
     const fetcher = isTV
       ? getTVShowsByGenre(genreId, page, sort)
@@ -58,14 +106,31 @@ export default function GenrePageClient({
 
     fetcher
       .then((data) => {
+        genreClientCache.set(cacheKey, data);
         setItems(data.results);
-        setTotalPages(Math.min(data.total_pages, 20));
+        const maxPages = Math.min(data.total_pages, 500);
+        setTotalPages(maxPages);
         setTotalResults(data.total_results);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        prefetchImages(data.results);
+
+        // Background prefetch next page for instant click
+        const nextPage = page + 1;
+        if (nextPage <= maxPages) {
+          const nextKey = `${type}_${genreId}_${nextPage}_${sort}`;
+          if (!genreClientCache.has(nextKey)) {
+            const nextFetcher = isTV
+              ? getTVShowsByGenre(genreId, nextPage, sort)
+              : getMoviesByGenre(genreId, nextPage, sort);
+            nextFetcher.then((nextData) => {
+              genreClientCache.set(nextKey, nextData);
+              prefetchImages(nextData.results);
+            }).catch(() => {});
+          }
+        }
       })
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
-  }, [page, sort, genreId, initialPage, initialSort, isTV]);
+  }, [page, sort, genreId, initialPage, normalizedInitialSort, isTV, type, items.length]);
 
   const handleSortChange = (newSort: string) => {
     setSort(newSort);
@@ -73,12 +138,19 @@ export default function GenrePageClient({
     setSortOpen(false);
     const query = isTV ? `type=tv&sort=${newSort}&page=1` : `sort=${newSort}&page=1`;
     router.push(`/genre/${genreId}?${query}`, { scroll: false });
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handlePageChange = (newPage: number) => {
+    if (newPage === page || newPage < 1 || newPage > totalPages) return;
     setPage(newPage);
     const query = isTV ? `type=tv&sort=${sort}&page=${newPage}` : `sort=${sort}&page=${newPage}`;
     router.push(`/genre/${genreId}?${query}`, { scroll: false });
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const sortRef = useRef<HTMLDivElement>(null);
@@ -94,7 +166,21 @@ export default function GenrePageClient({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const currentSortLabel = SORT_OPTIONS.find((o) => o.value === sort)?.label || 'Sort';
+  const currentSortLabel = sortOptions.find((o) => o.value === sort)?.label || 'Sort';
+
+  // Helper to build page numbers array with ellipsis
+  const getPageNumbers = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (page <= 4) {
+      return [1, 2, 3, 4, 5, '...', totalPages];
+    }
+    if (page >= totalPages - 3) {
+      return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, '...', page - 1, page, page + 1, '...', totalPages];
+  };
 
   return (
     <div className="min-h-screen pt-20 sm:pt-24 pb-4 sm:pb-6" style={{ background: '#050816' }}>
@@ -134,7 +220,7 @@ export default function GenrePageClient({
                   color: '#94a3b8',
                 }}
               >
-                <SlidersHorizontal size={14} className="sm:w-[15px] sm:h-[15px]" />
+                <SlidersHorizontal size={14} className={`sm:w-[15px] sm:h-[15px] ${isTV ? 'text-pink-400' : 'text-cyan-400'}`} />
                 <span className="whitespace-nowrap">{currentSortLabel}</span>
                 <ChevronRight
                   size={13}
@@ -154,7 +240,7 @@ export default function GenrePageClient({
                     boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
                   }}
                 >
-                  {SORT_OPTIONS.map((option) => (
+                  {sortOptions.map((option) => (
                     <button
                       key={option.value}
                       onClick={() => handleSortChange(option.value)}
@@ -214,40 +300,47 @@ export default function GenrePageClient({
           </div>
         )}
 
-        {/* Pagination */}
+        {/* ── Pagination with Large Page Window and Go-To-Top ── */}
         {totalPages > 1 && !loading && (
-          <div className="flex items-center justify-center gap-2 mt-8 sm:mt-10 mb-2">
+          <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mt-8 sm:mt-10 mb-2">
+            {/* Prev button */}
             <button
               onClick={() => handlePageChange(page - 1)}
               disabled={page === 1}
-              className="p-2 rounded-xl transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed hover:scale-105"
+              aria-label="Previous page"
+              className="p-2 sm:px-3 sm:py-2 rounded-xl transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105"
               style={{
                 background: 'rgba(255,255,255,0.06)',
                 border: '1px solid rgba(255,255,255,0.1)',
                 color: '#94a3b8',
               }}
             >
-              <ChevronLeft size={20} />
+              <ChevronLeft size={18} />
             </button>
 
-            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-              let pageNum: number;
-              if (totalPages <= 7) {
-                pageNum = i + 1;
-              } else if (page <= 4) {
-                pageNum = i + 1;
-              } else if (page >= totalPages - 3) {
-                pageNum = totalPages - 6 + i;
-              } else {
-                pageNum = page - 3 + i;
+            {/* Dynamic Page numbers with ellipsis */}
+            {getPageNumbers().map((item, idx) => {
+              if (item === '...') {
+                return (
+                  <span
+                    key={`ellipsis-${idx}`}
+                    className="w-8 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-xs sm:text-sm font-bold text-slate-500 select-none"
+                  >
+                    ...
+                  </span>
+                );
               }
+
+              const pageNum = item as number;
+              const isCurrent = page === pageNum;
+
               return (
                 <button
                   key={pageNum}
                   onClick={() => handlePageChange(pageNum)}
-                  className="w-10 h-10 rounded-xl text-sm font-semibold transition-all duration-200 hover:scale-105"
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 hover:scale-105"
                   style={
-                    page === pageNum
+                    isCurrent
                       ? {
                           background: isTV
                             ? 'linear-gradient(135deg, #ec4899, #7c3aed)'
@@ -269,17 +362,19 @@ export default function GenrePageClient({
               );
             })}
 
+            {/* Next button */}
             <button
               onClick={() => handlePageChange(page + 1)}
               disabled={page === totalPages}
-              className="p-2 rounded-xl transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed hover:scale-105"
+              aria-label="Next page"
+              className="p-2 sm:px-3 sm:py-2 rounded-xl transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105"
               style={{
                 background: 'rgba(255,255,255,0.06)',
                 border: '1px solid rgba(255,255,255,0.1)',
                 color: '#94a3b8',
               }}
             >
-              <ChevronRight size={20} />
+              <ChevronRight size={18} />
             </button>
           </div>
         )}

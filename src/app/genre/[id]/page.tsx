@@ -69,7 +69,7 @@ export default async function GenrePage({ params, searchParams }: PageProps) {
     <GenrePageClient
       genre={genre}
       initialItems={items.results as any}
-      totalPages={Math.min(items.total_pages, 20)}
+      totalPages={Math.min(items.total_pages, 500)}
       totalResults={items.total_results}
       initialPage={page}
       initialSort={sort}

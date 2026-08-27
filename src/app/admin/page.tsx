@@ -47,7 +47,7 @@ export default function AdminPage() {
         tvShowsCount={admin.totalAllTvShowsCount}
         totalEpisodesCount={admin.totalEpisodesCount}
         loading={admin.loading}
-        onRefresh={() => admin.fetchContent()}
+        onRefresh={() => admin.fetchContent({ force: true })}
         onOpenCreateMovie={() => {
           admin.setCreateContentType('movie');
           admin.setIsCreateModalOpen(true);
@@ -71,8 +71,8 @@ export default function AdminPage() {
         syncingGitHub={admin.syncingGitHub}
       />
 
-      {/* Content Area */}
-      {admin.loading ? (
+      {/* Content Area - Instant Tab Switching with zero layout flicker */}
+      {admin.loading && admin.movies.length === 0 && admin.tvShows.length === 0 ? (
         <div className="py-24 text-center text-slate-400">
           <RefreshCw size={28} className="animate-spin mx-auto mb-3 text-cyan-400" />
           <p className="text-xs font-semibold">Memuat data CMS...</p>
@@ -85,6 +85,7 @@ export default function AdminPage() {
           currentPage={admin.moviePage}
           totalPages={admin.totalMoviePages}
           onPageChange={admin.setMoviePage}
+          pageLoading={admin.pageLoading}
           onOpenCreate={() => {
             admin.setCreateContentType('movie');
             admin.setIsCreateModalOpen(true);
@@ -112,6 +113,7 @@ export default function AdminPage() {
           currentPage={admin.tvPage}
           totalPages={admin.totalTvPages}
           onPageChange={admin.setTvPage}
+          pageLoading={admin.pageLoading}
           onOpenCreate={() => {
             admin.setCreateContentType('tv_show');
             admin.setIsCreateModalOpen(true);

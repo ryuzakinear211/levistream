@@ -1,10 +1,16 @@
-import { getDatabase } from './client';
+import { getDatabase, isMongoConfigured } from './client';
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import { slugify, cleanVideoUrl } from '@/lib/urls';
 import { serializeTinaMovie, serializeTinaTVShow, serializeTinaTVEpisode } from '@/lib/tina/schema';
-import { saveGitHubFile, commitMultipleGitHubFiles, GitHubOptions } from '@/lib/githubStorage';
+import {
+  saveGitHubFile,
+  commitMultipleGitHubFiles,
+  getGitHubTree,
+  deleteGitHubFile,
+  GitHubOptions,
+} from '@/lib/githubStorage';
 import { memoryCache } from '@/lib/cache';
 
 export interface MongoMovie {
@@ -14,12 +20,13 @@ export interface MongoMovie {
   title: string;
   videourl: string;
   image_url: string;
-  deskripsi: string;
-  rating: number;
-  featured: boolean;
+  deskripsi?: string;
+  rating?: number;
+  featured?: boolean;
   subtitles?: string;
   duration?: string;
   content?: string;
+  deleted?: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -30,10 +37,12 @@ export interface MongoTVShow {
   tmdb_id: number;
   title: string;
   image_url: string;
-  deskripsi: string;
-  rating: number;
-  featured: boolean;
+  deskripsi?: string;
+  rating?: number;
+  featured?: boolean;
   content?: string;
+  deleted?: boolean;
+  episodes?: MongoTVEpisode[];
   createdAt: number;
   updatedAt: number;
 }
@@ -65,6 +74,9 @@ const EPISODES_COLLECTION = 'tv_episodes';
  * Direct collection references without index overhead on every call
  */
 async function getCollectionsRaw() {
+  if (!isMongoConfigured()) {
+    throw new Error('MONGODB_URI is not configured');
+  }
   const db = await getDatabase();
   const movies = db.collection<MongoMovie>(MOVIES_COLLECTION);
   const tvShows = db.collection<MongoTVShow>(TV_SHOWS_COLLECTION);
@@ -76,7 +88,7 @@ async function getCollectionsRaw() {
 let isInitialized = false;
 
 function ensureInitialized() {
-  if (isInitialized) return;
+  if (!isMongoConfigured() || isInitialized) return;
   isInitialized = true;
 
   // Run in background without blocking current request
@@ -93,7 +105,6 @@ function ensureInitialized() {
 
       const movieCount = await movies.countDocuments();
       const showCount = await tvShows.countDocuments();
-
       if (movieCount === 0 && showCount === 0) {
         await seedFromMarkdownFiles(movies, tvShows, episodes);
       }
@@ -255,8 +266,12 @@ function invalidateAllMongoCaches() {
   memoryCache.invalidate('mongo_');
   memoryCache.invalidate('markdown_');
   memoryCache.invalidate('featured_');
+  memoryCache.invalidate('custom_');
   memoryCache.invalidate('content_provider_');
   memoryCache.invalidate('admin_');
+  memoryCache.invalidate('cms_');
+  memoryCache.invalidate('bucket_');
+  memoryCache.invalidate('hero_');
 }
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -290,6 +305,9 @@ export interface MongoPaginationOptions {
 export async function getPaginatedMongoMovies(
   options: MongoPaginationOptions = {}
 ): Promise<PaginatedResult<MongoMovie>> {
+  if (!isMongoConfigured()) {
+    return { items: [], total: 0, page: 1, limit: 7, totalPages: 1 };
+  }
   ensureInitialized();
   const page = Math.max(1, Number(options.page) || 1);
   const limit = Math.max(1, Number(options.limit) || 7);
@@ -334,6 +352,7 @@ export async function getPaginatedMongoMovies(
 }
 
 export async function getMongoMovies(): Promise<MongoMovie[]> {
+  if (!isMongoConfigured()) return [];
   ensureInitialized();
   return memoryCache.getOrFetch<MongoMovie[]>(
     'mongo_all_movies',
@@ -358,6 +377,7 @@ export async function getMongoMovies(): Promise<MongoMovie[]> {
 }
 
 export async function getMongoMovieBySlug(slugOrId: string | number): Promise<MongoMovie | null> {
+  if (!isMongoConfigured()) return null;
   const allMovies = await getMongoMovies();
   const rawKey = String(slugOrId).trim().toLowerCase().replace(/\.(md|markdown)$/i, '');
   const idNum = Number(rawKey);
@@ -448,6 +468,9 @@ export async function deleteMongoMovie(slug: string): Promise<boolean> {
 export async function getPaginatedMongoTVShows(
   options: MongoPaginationOptions = {}
 ): Promise<PaginatedResult<MongoTVShow & { episodes: MongoTVEpisode[] }>> {
+  if (!isMongoConfigured()) {
+    return { items: [], total: 0, page: 1, limit: 7, totalPages: 1 };
+  }
   ensureInitialized();
   const page = Math.max(1, Number(options.page) || 1);
   const limit = Math.max(1, Number(options.limit) || 7);
@@ -509,6 +532,9 @@ export async function getMongoContentCounts(): Promise<{
   totalTVShows: number;
   totalEpisodes: number;
 }> {
+  if (!isMongoConfigured()) {
+    return { totalMovies: 0, totalTVShows: 0, totalEpisodes: 0 };
+  }
   ensureInitialized();
   return withTimeout(
     (async () => {
@@ -531,6 +557,7 @@ export async function getMongoContentCounts(): Promise<{
 }
 
 export async function getMongoTVShows(): Promise<(MongoTVShow & { episodes: MongoTVEpisode[] })[]> {
+  if (!isMongoConfigured()) return [];
   ensureInitialized();
   return memoryCache.getOrFetch<(MongoTVShow & { episodes: MongoTVEpisode[] })[]>(
     'mongo_all_tv_shows',
@@ -563,6 +590,7 @@ export async function getMongoTVShows(): Promise<(MongoTVShow & { episodes: Mong
 export async function getMongoTVShowBySlug(
   showSlugOrId: string | number
 ): Promise<(MongoTVShow & { episodes: MongoTVEpisode[] }) | null> {
+  if (!isMongoConfigured()) return null;
   const allShows = await getMongoTVShows();
   const rawKey = String(showSlugOrId).trim().toLowerCase().replace(/\.(md|markdown)$/i, '');
   const idNum = Number(rawKey);
@@ -701,6 +729,33 @@ export async function deleteMongoTVShow(showSlug: string): Promise<boolean> {
   return res.deletedCount > 0;
 }
 
+export async function deleteMongoEpisode(showSlug: string, seasonFolder: string, episode: string): Promise<boolean> {
+  const { episodes } = await getCollectionsRaw();
+  const cleanEp = episode.replace(/\.(md|markdown)$/i, '');
+  const res = await episodes.deleteOne({ showSlug, seasonFolder, episode: cleanEp });
+  invalidateAllMongoCaches();
+  return res.deletedCount > 0;
+}
+
+// ──────────────────────────────────────────
+export async function flushStagedContent(): Promise<{ flushedCount: number }> {
+  try {
+    const { movies, tvShows, episodes } = await getCollectionsRaw();
+    const [mRes, tRes, eRes] = await Promise.all([
+      movies.deleteMany({}),
+      tvShows.deleteMany({}),
+      episodes.deleteMany({}),
+    ]);
+    invalidateAllMongoCaches();
+    const flushedCount = (mRes.deletedCount || 0) + (tRes.deletedCount || 0) + (eRes.deletedCount || 0);
+    console.log(`[MongoDB] Staging buffer flushed: ${flushedCount} items cleared from database`);
+    return { flushedCount };
+  } catch (err) {
+    console.warn('[MongoDB] flushStagedContent notice:', err);
+    return { flushedCount: 0 };
+  }
+}
+
 // ──────────────────────────────────────────
 // SYNC MONGODB TO GITHUB (ATOMIC BULK COMMIT)
 // ──────────────────────────────────────────
@@ -711,7 +766,7 @@ export async function syncMongoDBToGitHub(ghConfig: GitHubOptions) {
     throw new Error('Token GitHub diperlukan untuk melakukan sinkronisasi ke repository.');
   }
 
-  // 1. Fetch freshest, live un-cached data directly from MongoDB
+  // 1. Fetch freshest, live un-cached data directly from MongoDB staging buffer
   const { movies, tvShows, episodes } = await getCollectionsRaw();
   const [allMovies, allShows, allEpisodes] = await Promise.all([
     movies.find({}).sort({ updatedAt: -1 }).toArray(),
@@ -772,49 +827,44 @@ export async function syncMongoDBToGitHub(ghConfig: GitHubOptions) {
     filesMap.set(epPath, epContent);
   }
 
-  // 4. Merge any local filesystem files if missing or newer (for local development)
-  try {
-    const VIDEO_DIR = path.join(process.cwd(), 'video');
-    const TV_DIR = path.join(process.cwd(), 'tv');
-
-    if (fs.existsSync(VIDEO_DIR)) {
-      const localMovies = fs.readdirSync(VIDEO_DIR).filter((f) => f.endsWith('.md') || f.endsWith('.markdown'));
-      for (const m of localMovies) {
-        const rel = `video/${m}`;
-        if (!filesMap.has(rel)) {
-          const content = fs.readFileSync(path.join(VIDEO_DIR, m), 'utf8');
-          filesMap.set(rel, content);
-        }
-      }
-    }
-
-    if (fs.existsSync(TV_DIR)) {
-      const dirs = fs.readdirSync(TV_DIR, { withFileTypes: true }).filter((d) => d.isDirectory());
-      for (const d of dirs) {
-        const showDir = path.join(TV_DIR, d.name);
-        const indexMd = fs.existsSync(path.join(showDir, '_index.md'))
-          ? path.join(showDir, '_index.md')
-          : fs.existsSync(path.join(showDir, 'index.md'))
-          ? path.join(showDir, 'index.md')
-          : null;
-        if (indexMd && !filesMap.has(`tv/${d.name}/_index.md`)) {
-          filesMap.set(`tv/${d.name}/_index.md`, fs.readFileSync(indexMd, 'utf8'));
-        }
-      }
-    }
-  } catch {}
-
   const filesArray = Array.from(filesMap.entries()).map(([filePath, content]) => ({
     path: filePath,
     content,
   }));
 
-  // 5. Commit all files in a single atomic Git Tree commit (< 1 second)
+  // 4. Check for orphan/deleted files on GitHub repository that are no longer in MongoDB
+  try {
+    const targetFilesSet = new Set(filesArray.map((f) => f.path.replace(/^\/+/, '')));
+    const ghTree = await getGitHubTree(ghConfig);
+    const contentBlobsOnGitHub = ghTree.filter(
+      (item) =>
+        item.type === 'blob' &&
+        (item.path.startsWith('video/') || item.path.startsWith('tv/')) &&
+        (item.path.endsWith('.md') || item.path.endsWith('.markdown'))
+    );
+
+    for (const item of contentBlobsOnGitHub) {
+      if (!targetFilesSet.has(item.path)) {
+        try {
+          console.log(`[syncMongoDBToGitHub] Deleting orphan file from GitHub: ${item.path}`);
+          await deleteGitHubFile(item.path, `cms: delete ${item.path}`, ghConfig);
+        } catch (delErr) {
+          console.warn(`[syncMongoDBToGitHub] Warning deleting orphan ${item.path}:`, delErr);
+        }
+      }
+    }
+  } catch (treeErr) {
+    console.warn('[syncMongoDBToGitHub] GitHub tree prune notice:', treeErr);
+  }
+
+  // 5. Commit all active files in a single atomic Git Tree commit (< 1 second)
   const res = await commitMultipleGitHubFiles(
     filesArray,
     `cms: sync ${filesArray.length} content files from CMS`,
     ghConfig
   );
+
+  invalidateAllMongoCaches();
 
   return { success: true, syncedCount: res.syncedCount };
 }

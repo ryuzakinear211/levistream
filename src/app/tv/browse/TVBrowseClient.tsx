@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { SlidersHorizontal, ChevronLeft, ChevronRight, Tv } from 'lucide-react';
 import { TVShow, Genre } from '@/types/tmdb';
-import { discoverTVShows, getTVGenres, getGenres } from '@/lib/tmdb';
+import { discoverTVShows, getTVGenres, getGenres, prefetchImages } from '@/lib/tmdb';
 import MovieCard, { MovieCardSkeleton } from '@/components/MovieCard';
 import GenreFilter from '@/components/GenreFilter';
 
@@ -44,7 +44,7 @@ export default function TVBrowseClient({
   const [page, setPage] = useState(initialPage);
   const [sort, setSort] = useState(initialSort);
   const [genreId, setGenreId] = useState<number | undefined>(initialGenreId);
-  const [totalPages, setTotalPages] = useState(initialTotalPages);
+  const [totalPages, setTotalPages] = useState(Math.min(initialTotalPages, 500));
   const [totalResults, setTotalResults] = useState(initialTotalResults);
   const [loading, setLoading] = useState(initialShows.length === 0);
   const [sortOpen, setSortOpen] = useState(false);
@@ -89,9 +89,23 @@ export default function TVBrowseClient({
     if (tvClientCache.has(cacheKey)) {
       const cached = tvClientCache.get(cacheKey);
       setShows(cached.results);
-      setTotalPages(Math.min(cached.total_pages, 20));
+      setTotalPages(Math.min(cached.total_pages, 500));
       setTotalResults(cached.total_results);
       setLoading(false);
+
+      // Background prefetch next page
+      const nextPage = page + 1;
+      if (nextPage <= Math.min(cached.total_pages, 500)) {
+        const nextKey = `${nextPage}_${sort}_${genreId || 'all'}`;
+        if (!tvClientCache.has(nextKey)) {
+          discoverTVShows(nextPage, sort, genreId)
+            .then((nextData) => {
+              tvClientCache.set(nextKey, nextData);
+              prefetchImages(nextData.results);
+            })
+            .catch(() => {});
+        }
+      }
       return;
     }
 
@@ -100,8 +114,24 @@ export default function TVBrowseClient({
       .then((data) => {
         tvClientCache.set(cacheKey, data);
         setShows(data.results);
-        setTotalPages(Math.min(data.total_pages, 20));
+        const maxPages = Math.min(data.total_pages, 500);
+        setTotalPages(maxPages);
         setTotalResults(data.total_results);
+        prefetchImages(data.results);
+
+        // Background prefetch next page for instant next-page clicks
+        const nextPage = page + 1;
+        if (nextPage <= maxPages) {
+          const nextKey = `${nextPage}_${sort}_${genreId || 'all'}`;
+          if (!tvClientCache.has(nextKey)) {
+            discoverTVShows(nextPage, sort, genreId)
+              .then((nextData) => {
+                tvClientCache.set(nextKey, nextData);
+                prefetchImages(nextData.results);
+              })
+              .catch(() => {});
+          }
+        }
       })
       .catch(() => setShows([]))
       .finally(() => setLoading(false));
@@ -122,14 +152,35 @@ export default function TVBrowseClient({
     setPage(1);
     setSortOpen(false);
     updateUrl(1, newSort, genreId);
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handlePageChange = (newPage: number) => {
+    if (newPage === page || newPage < 1 || newPage > totalPages) return;
     setPage(newPage);
     updateUrl(newPage, sort, genreId);
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const currentSortLabel = SORT_OPTIONS.find((o) => o.value === sort)?.label || 'Sort';
+
+  // Helper to build page numbers array with ellipsis
+  const getPageNumbers = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (page <= 4) {
+      return [1, 2, 3, 4, 5, '...', totalPages];
+    }
+    if (page >= totalPages - 3) {
+      return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, '...', page - 1, page, page + 1, '...', totalPages];
+  };
 
   return (
     <div className="min-h-screen pt-20 sm:pt-24 pb-4 sm:pb-6" style={{ background: '#050816' }}>
@@ -239,40 +290,47 @@ export default function TVBrowseClient({
           </div>
         )}
 
-        {/* ── Pagination ── */}
+        {/* ── Pagination with Large Page Window and Go-To-Top ── */}
         {totalPages > 1 && !loading && (
-          <div className="flex items-center justify-center gap-2 mt-8 sm:mt-10 mb-2">
+          <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mt-8 sm:mt-10 mb-2">
+            {/* Prev button */}
             <button
               onClick={() => handlePageChange(page - 1)}
               disabled={page === 1}
-              className="p-2 rounded-xl transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed hover:scale-105"
+              aria-label="Previous page"
+              className="p-2 sm:px-3 sm:py-2 rounded-xl transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105"
               style={{
                 background: 'rgba(255,255,255,0.06)',
                 border: '1px solid rgba(255,255,255,0.1)',
                 color: '#94a3b8',
               }}
             >
-              <ChevronLeft size={20} />
+              <ChevronLeft size={18} />
             </button>
 
-            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-              let pageNum: number;
-              if (totalPages <= 7) {
-                pageNum = i + 1;
-              } else if (page <= 4) {
-                pageNum = i + 1;
-              } else if (page >= totalPages - 3) {
-                pageNum = totalPages - 6 + i;
-              } else {
-                pageNum = page - 3 + i;
+            {/* Dynamic Page numbers with ellipsis */}
+            {getPageNumbers().map((item, idx) => {
+              if (item === '...') {
+                return (
+                  <span
+                    key={`ellipsis-${idx}`}
+                    className="w-8 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-xs sm:text-sm font-bold text-slate-500 select-none"
+                  >
+                    ...
+                  </span>
+                );
               }
+
+              const pageNum = item as number;
+              const isCurrent = page === pageNum;
+
               return (
                 <button
                   key={pageNum}
                   onClick={() => handlePageChange(pageNum)}
-                  className="w-10 h-10 rounded-xl text-sm font-semibold transition-all duration-200 hover:scale-105"
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 hover:scale-105"
                   style={
-                    page === pageNum
+                    isCurrent
                       ? {
                           background: 'linear-gradient(135deg, #ec4899, #7c3aed)',
                           color: 'white',
@@ -290,17 +348,19 @@ export default function TVBrowseClient({
               );
             })}
 
+            {/* Next button */}
             <button
               onClick={() => handlePageChange(page + 1)}
               disabled={page === totalPages}
-              className="p-2 rounded-xl transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed hover:scale-105"
+              aria-label="Next page"
+              className="p-2 sm:px-3 sm:py-2 rounded-xl transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105"
               style={{
                 background: 'rgba(255,255,255,0.06)',
                 border: '1px solid rgba(255,255,255,0.1)',
                 color: '#94a3b8',
               }}
             >
-              <ChevronRight size={20} />
+              <ChevronRight size={18} />
             </button>
           </div>
         )}

@@ -23,12 +23,39 @@ interface TVListViewProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  pageLoading?: boolean;
   onOpenCreate: () => void;
   onOpenEdit: (show: TVShowItem) => void;
   onOpenEditEpisode: (ep: TVEpisodeItem, show: TVShowItem) => void;
   onDeleteShow: (path: string, title: string) => void;
   onDeleteEpisode: (path: string, title: string) => void;
   onQuickAddEpisode: (show: TVShowItem, seasonSlug: string) => void;
+}
+
+function TVCardSkeleton() {
+  return (
+    <div className="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-[#0c1224] border border-white/5 animate-pulse space-y-3 w-full">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-white/5">
+        <div className="flex items-start sm:items-center gap-2.5">
+          <div className="w-12 sm:w-14 aspect-[2/3] min-h-[72px] sm:min-h-[84px] rounded-lg bg-slate-800/80 flex-shrink-0" />
+          <div className="space-y-2 py-1 flex-1">
+            <div className="flex gap-1.5">
+              <div className="h-4 w-16 bg-slate-800/90 rounded" />
+              <div className="h-4 w-20 bg-slate-800/60 rounded" />
+              <div className="h-4 w-16 bg-slate-800/40 rounded" />
+            </div>
+            <div className="h-4 w-48 bg-slate-700/80 rounded" />
+            <div className="h-2.5 w-32 bg-slate-800/50 rounded" />
+          </div>
+        </div>
+        <div className="flex gap-1.5">
+          <div className="h-8 w-16 bg-slate-800/60 rounded-lg" />
+          <div className="h-8 w-24 bg-slate-800/60 rounded-lg" />
+        </div>
+      </div>
+      <div className="h-10 bg-slate-800/40 rounded-xl" />
+    </div>
+  );
 }
 
 function SafeAdminImage({
@@ -74,6 +101,7 @@ export const TVListView: React.FC<TVListViewProps> = ({
   currentPage,
   totalPages,
   onPageChange,
+  pageLoading,
   onOpenCreate,
   onOpenEdit,
   onOpenEditEpisode,
@@ -126,6 +154,16 @@ export const TVListView: React.FC<TVListViewProps> = ({
     const match = slug.match(/e(\d+)/i) || slug.match(/ep(\d+)/i) || slug.match(/(\d+)/);
     return match ? match[1] : slug;
   };
+
+  if (pageLoading) {
+    return (
+      <div className="space-y-3.5 w-full">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <TVCardSkeleton key={i} />
+        ))}
+      </div>
+    );
+  }
 
   if (tvShows.length === 0) {
     return (

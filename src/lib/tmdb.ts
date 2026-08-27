@@ -173,9 +173,14 @@ export async function discoverMovies(
   sortBy: string = 'popularity.desc',
   genreId?: number
 ): Promise<TMDBResponse<Movie>> {
+  // Normalize sort_by for Movies
+  let normalizedSort = sortBy;
+  if (sortBy === 'first_air_date.desc') normalizedSort = 'release_date.desc';
+  if (sortBy === 'first_air_date.asc') normalizedSort = 'release_date.asc';
+
   const params: Record<string, string> = {
     page: String(page),
-    sort_by: sortBy,
+    sort_by: normalizedSort,
   };
   if (genreId) {
     params.with_genres = String(genreId);
@@ -240,14 +245,36 @@ export async function discoverTVShows(
   sortBy: string = 'popularity.desc',
   genreId?: number
 ): Promise<TMDBResponse<TVShow>> {
+  // Normalize sort_by for TV shows (TMDB /discover/tv uses first_air_date, not release_date)
+  let normalizedSort = sortBy;
+  if (sortBy === 'release_date.desc') normalizedSort = 'first_air_date.desc';
+  if (sortBy === 'release_date.asc') normalizedSort = 'first_air_date.asc';
+  if (sortBy === 'revenue.desc') normalizedSort = 'popularity.desc';
+
   const params: Record<string, string> = {
     page: String(page),
-    sort_by: sortBy,
+    sort_by: normalizedSort,
   };
   if (genreId) {
     params.with_genres = String(genreId);
   }
   return fetchTMDB<TMDBResponse<TVShow>>('/discover/tv', params);
+}
+
+/**
+ * Preload images in the browser background cache for instant rendering
+ */
+export function prefetchImages(items: (Movie | TVShow)[], maxCount: number = 8): void {
+  if (typeof window === 'undefined') return;
+  const targetItems = items.slice(0, maxCount);
+  targetItems.forEach((item) => {
+    const path = item.poster_path || item.backdrop_path;
+    if (path) {
+      const url = getImageUrl(path, 'w342');
+      const img = new window.Image();
+      img.src = url;
+    }
+  });
 }
 
 export interface TMDBImageItem {

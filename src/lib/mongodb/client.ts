@@ -23,8 +23,18 @@ declare global {
   var _mongoClientInstance: MongoClient | undefined;
 }
 
+export function isMongoConfigured(): boolean {
+  const currentUri = process.env.MONGODB_URI || MONGODB_CONFIG.uri || '';
+  return Boolean(currentUri && currentUri.trim().startsWith('mongodb'));
+}
+
 function createNewClient(): { client: MongoClient; promise: Promise<MongoClient> } {
-  const newClient = new MongoClient(uri, options);
+  const currentUri = process.env.MONGODB_URI || MONGODB_CONFIG.uri || '';
+  if (!currentUri || !currentUri.trim().startsWith('mongodb')) {
+    throw new Error('MONGODB_URI is not configured in environment variables');
+  }
+
+  const newClient = new MongoClient(currentUri, options);
   const promise = newClient.connect().catch((err) => {
     console.warn('[MongoDB] Connection initialization error:', err.message);
     global._mongoClientPromise = undefined;
@@ -32,12 +42,6 @@ function createNewClient(): { client: MongoClient; promise: Promise<MongoClient>
     throw err;
   });
   return { client: newClient, promise };
-}
-
-if (!global._mongoClientPromise) {
-  const { client, promise } = createNewClient();
-  global._mongoClientInstance = client;
-  global._mongoClientPromise = promise;
 }
 
 export function resetMongoClient() {
@@ -50,12 +54,14 @@ export function resetMongoClient() {
   global._mongoClientInstance = undefined;
 }
 
-export default global._mongoClientPromise as Promise<MongoClient>;
-
 /**
  * Returns active database with automatic retry on TLS/SSL socket errors
  */
 export async function getDatabase() {
+  if (!isMongoConfigured()) {
+    throw new Error('MONGODB_URI is not configured');
+  }
+
   try {
     if (!global._mongoClientPromise) {
       const { client, promise } = createNewClient();

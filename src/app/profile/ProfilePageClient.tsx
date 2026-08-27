@@ -68,7 +68,6 @@ function WatchlistCardItem({
   item: any;
   onRemove: (id: string | number) => void;
 }) {
-  const [isImgLoaded, setIsImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
 
   const targetUrl = item.urlPath || (item.type === 'tv' ? `/tv/${item.contentId}` : `/movie/${item.contentId}`);
@@ -86,22 +85,23 @@ function WatchlistCardItem({
       {/* ── Poster Wrapper (Exact styling matching MovieCard) ── */}
       <div className="relative aspect-[2/3] w-full rounded-xl sm:rounded-2xl overflow-hidden bg-[#0c1224] border border-white/10 shadow-md group-hover:shadow-xl transition-all duration-300 transform group-hover:-translate-y-1.5">
         <Link href={targetUrl} className="block w-full h-full relative">
-          {/* Skeleton Shimmer while image loads */}
-          {!isImgLoaded && !imgError && (
-            <div className="absolute inset-0 skeleton bg-white/[0.08] z-0" />
-          )}
+          <div className="absolute inset-0 bg-white/[0.04]" />
 
-          <Image
-            src={posterSrc}
-            alt={item.title}
-            fill
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-            className={`object-cover transition-all duration-500 ease-out group-hover:scale-105 ${
-              isImgLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
-            }`}
-            onLoad={() => setIsImgLoaded(true)}
-            onError={() => setImgError(true)}
-          />
+          {!imgError ? (
+            <img
+              src={posterSrc}
+              alt={item.title}
+              loading="lazy"
+              decoding="async"
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-3 bg-gradient-to-br from-[#0f1a2e] to-[#1a2540] text-slate-500">
+              <Film size={28} />
+              <span className="text-xs text-center line-clamp-2 text-slate-400 font-medium">{item.title}</span>
+            </div>
+          )}
 
           {/* ── IMDb-Style Yellow Rating Badge (Top-Right) ── */}
           <div className="absolute top-2 right-2 z-10 flex items-center gap-1 px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded-md bg-[#f5c518] text-black font-black text-[10px] sm:text-[11.5px] shadow-lg shadow-black/50 tracking-tight">

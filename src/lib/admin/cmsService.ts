@@ -33,6 +33,7 @@ import {
   deleteMongoMovie,
   saveMongoTVShow,
   deleteMongoTVShow,
+  deleteMongoEpisode,
   syncMongoDBToGitHub,
 } from '@/lib/mongodb/service';
 
@@ -64,13 +65,16 @@ export function getGitHubConfigFromRequest(req: Request): GitHubOptions {
  */
 export function selectiveRevalidateAll() {
   try {
-    // 1. Invalidate only local markdown, mongo, admin & featured caches
+    // 1. Invalidate only local markdown, mongo, admin, custom & featured caches
     memoryCache.invalidate('markdown_');
     memoryCache.invalidate('featured_');
+    memoryCache.invalidate('custom_');
     memoryCache.invalidate('content_provider_');
     memoryCache.invalidate('cms_');
     memoryCache.invalidate('mongo_');
     memoryCache.invalidate('admin_');
+    memoryCache.invalidate('bucket_');
+    memoryCache.invalidate('hero_');
 
     // 2. Invalidate content provider in-memory registry
     try {
@@ -130,100 +134,122 @@ export async function fetchPaginatedAdminContent(
     getMongoContentCounts(),
   ]);
 
-  // Read local disk files for local/hybrid resiliency and zero data loss
+  const hasMongoMovies = mongoMoviesPaged.total > 0 || (counts.totalMovies || 0) > 0;
+  const hasMongoTV = mongoTVPaged.total > 0 || (counts.totalTVShows || 0) > 0;
+
   let localDiskMovies: any[] = [];
   let localDiskTVShows: any[] = [];
 
-  try {
-    if (fs.existsSync(VIDEO_DIR)) {
-      const files = fs.readdirSync(VIDEO_DIR).filter((f) => /\.(md|markdown)$/i.test(f));
-      localDiskMovies = files.map((file) => {
-        const fullPath = path.join(VIDEO_DIR, file);
-        const raw = fs.readFileSync(fullPath, 'utf8');
-        const stat = fs.statSync(fullPath);
-        const { data, content } = matter(raw);
-        const slug = file.replace(/\.(md|markdown)$/i, '');
-        return {
-          filename: file,
-          slug,
-          relativePath: `video/${file}`,
-          frontmatter: data || {},
-          content: content || '',
-          updatedAt: stat.mtimeMs || Date.now(),
-        };
-      });
-    }
+  if (!hasMongoMovies || !hasMongoTV) {
+    try {
+      const diskData = await memoryCache.getOrFetch<{ movies: any[]; tvShows: any[] }>(
+        'admin_repo_disk_scan',
+        async () => {
+          let diskMovies: any[] = [];
+          let diskTV: any[] = [];
 
-    if (fs.existsSync(TV_DIR)) {
-      const dirs = fs.readdirSync(TV_DIR, { withFileTypes: true }).filter((d) => d.isDirectory());
-      for (const d of dirs) {
-        const showPath = path.join(TV_DIR, d.name);
-        let indexData: any = {};
-        let indexContent = '';
-        const indexPath = fs.existsSync(path.join(showPath, '_index.md'))
-          ? path.join(showPath, '_index.md')
-          : fs.existsSync(path.join(showPath, 'index.md'))
-          ? path.join(showPath, 'index.md')
-          : null;
+          if (fs.existsSync(VIDEO_DIR)) {
+            const files = fs.readdirSync(VIDEO_DIR).filter((f) => /\.(md|markdown)$/i.test(f));
+            diskMovies = files.map((file) => {
+              try {
+                const fullPath = path.join(VIDEO_DIR, file);
+                const raw = fs.readFileSync(fullPath, 'utf8');
+                const stat = fs.statSync(fullPath);
+                const { data, content } = matter(raw);
+                const slug = file.replace(/\.(md|markdown)$/i, '');
+                return {
+                  filename: file,
+                  slug,
+                  relativePath: `video/${file}`,
+                  frontmatter: data || {},
+                  content: content || '',
+                  updatedAt: stat.mtimeMs || Date.now(),
+                };
+              } catch {
+                return null;
+              }
+            }).filter(Boolean) as any[];
+          }
 
-        if (indexPath) {
-          const raw = fs.readFileSync(indexPath, 'utf8');
-          const parsed = matter(raw);
-          indexData = parsed.data || {};
-          indexContent = parsed.content || '';
-        }
+          if (fs.existsSync(TV_DIR)) {
+            const dirs = fs.readdirSync(TV_DIR, { withFileTypes: true }).filter((d) => d.isDirectory());
+            for (const d of dirs) {
+              const showPath = path.join(TV_DIR, d.name);
+              let indexData: any = {};
+              let indexContent = '';
+              const indexPath = fs.existsSync(path.join(showPath, '_index.md'))
+                ? path.join(showPath, '_index.md')
+                : fs.existsSync(path.join(showPath, 'index.md'))
+                ? path.join(showPath, 'index.md')
+                : null;
 
-        const episodes: any[] = [];
-        const entries = fs.readdirSync(showPath, { withFileTypes: true });
-        for (const entry of entries) {
-          if (entry.name === '_index.md' || entry.name === 'index.md') continue;
-          if (entry.isDirectory()) {
-            const seasonFolder = entry.name;
-            const seasonPath = path.join(showPath, seasonFolder);
-            const epFiles = fs.readdirSync(seasonPath).filter((f) => /\.(md|markdown)$/i.test(f));
-            for (const epFile of epFiles) {
-              const raw = fs.readFileSync(path.join(seasonPath, epFile), 'utf8');
-              const { data, content } = matter(raw);
-              const epSlug = epFile.replace(/\.(md|markdown)$/i, '');
-              episodes.push({
+              if (indexPath) {
+                const raw = fs.readFileSync(indexPath, 'utf8');
+                const parsed = matter(raw);
+                indexData = parsed.data || {};
+                indexContent = parsed.content || '';
+              }
+
+              const episodes: any[] = [];
+              const entries = fs.readdirSync(showPath, { withFileTypes: true });
+              for (const entry of entries) {
+                if (entry.name === '_index.md' || entry.name === 'index.md') continue;
+                if (entry.isDirectory()) {
+                  const seasonFolder = entry.name;
+                  const seasonPath = path.join(showPath, seasonFolder);
+                  const epFiles = fs.readdirSync(seasonPath).filter((f) => /\.(md|markdown)$/i.test(f));
+                  for (const epFile of epFiles) {
+                    const raw = fs.readFileSync(path.join(seasonPath, epFile), 'utf8');
+                    const { data, content } = matter(raw);
+                    const epSlug = epFile.replace(/\.(md|markdown)$/i, '');
+                    episodes.push({
+                      showSlug: d.name,
+                      seasonFolder,
+                      filename: epFile,
+                      slug: epSlug,
+                      relativePath: `tv/${d.name}/${seasonFolder}/${epFile}`,
+                      frontmatter: data || {},
+                      content: content || '',
+                      displayTitle: data?.title || epSlug,
+                      posterUrl: data?.image_url ? getImageUrl(data.image_url, 'w500') : null,
+                      updatedAt: Date.now(),
+                    });
+                  }
+                }
+              }
+
+              diskTV.push({
                 showSlug: d.name,
-                seasonFolder,
-                filename: epFile,
-                slug: epSlug,
-                relativePath: `tv/${d.name}/${seasonFolder}/${epFile}`,
-                frontmatter: data || {},
-                content: content || '',
-                displayTitle: data?.title || epSlug,
-                posterUrl: data?.image_url ? getImageUrl(data.image_url, 'w500') : null,
+                relativePath: `tv/${d.name}/_index.md`,
+                indexFrontmatter: indexData,
+                indexContent,
                 updatedAt: Date.now(),
+                episodes,
               });
             }
           }
-        }
+          return { movies: diskMovies, tvShows: diskTV };
+        },
+        60_000,
+        15_000
+      );
 
-        localDiskTVShows.push({
-          showSlug: d.name,
-          relativePath: `tv/${d.name}/_index.md`,
-          indexFrontmatter: indexData,
-          indexContent,
-          updatedAt: Date.now(),
-          episodes,
-        });
-      }
+      localDiskMovies = diskData.movies;
+      localDiskTVShows = diskData.tvShows;
+    } catch (err) {
+      console.warn('[cmsService] Repository disk scan notice:', err);
     }
-  } catch (err) {
-    console.warn('[cmsService] Local disk scan notice:', err);
   }
 
   // ----------------------------------------------------
-  // RESOLVE MOVIES: Merge MongoDB + Local Disk Files seamlessly
+  // RESOLVE MOVIES: MongoDB (Live Cloud DB) with Disk Fallback
   // ----------------------------------------------------
   let rawMovies: any[] = [];
   let totalMovies = 0;
   let totalMoviePages = 1;
   let totalAllMoviesCount = 0;
 
-  if (mongoMoviesPaged.total > 0) {
+  if (hasMongoMovies) {
     rawMovies = mongoMoviesPaged.items.map((m) => ({
       filename: `${m.slug}.md`,
       slug: m.slug,
@@ -247,7 +273,6 @@ export async function fetchPaginatedAdminContent(
     totalMoviePages = mongoMoviesPaged.totalPages;
     totalAllMoviesCount = counts.totalMovies || totalMovies;
   } else if (localDiskMovies.length > 0) {
-    // If MongoDB returned 0 or is offline, paginate local disk movies
     let filtered = localDiskMovies;
     if (search) {
       filtered = filtered.filter(
@@ -257,14 +282,14 @@ export async function fetchPaginatedAdminContent(
       );
     }
     totalMovies = filtered.length;
-    totalMoviePages = Math.ceil(totalMovies / limit) || 1;
+    totalMoviePages = Math.max(1, Math.ceil(totalMovies / limit));
     totalAllMoviesCount = localDiskMovies.length;
     const start = (moviePage - 1) * limit;
     rawMovies = filtered.slice(start, start + limit);
   }
 
   // ----------------------------------------------------
-  // RESOLVE TV SHOWS: Merge MongoDB + Local Disk Files seamlessly
+  // RESOLVE TV SHOWS: MongoDB (Live Cloud DB) with Disk Fallback
   // ----------------------------------------------------
   let rawTvShows: any[] = [];
   let totalTvShows = 0;
@@ -272,7 +297,7 @@ export async function fetchPaginatedAdminContent(
   let totalAllTvShowsCount = 0;
   let totalEpisodesCount = counts.totalEpisodes || 0;
 
-  if (mongoTVPaged.total > 0) {
+  if (hasMongoTV) {
     rawTvShows = mongoTVPaged.items.map((s) => ({
       showSlug: s.showSlug,
       relativePath: `tv/${s.showSlug}/_index.md`,
@@ -321,14 +346,14 @@ export async function fetchPaginatedAdminContent(
       );
     }
     totalTvShows = filtered.length;
-    totalTvPages = Math.ceil(totalTvShows / limit) || 1;
+    totalTvPages = Math.max(1, Math.ceil(totalTvShows / limit));
     totalAllTvShowsCount = localDiskTVShows.length;
     totalEpisodesCount = localDiskTVShows.reduce((acc, s) => acc + (s.episodes?.length || 0), 0);
     const start = (tvPage - 1) * limit;
     rawTvShows = filtered.slice(start, start + limit);
   }
 
-  // 2. ENRICH ONLY THE 7 ITEMS IN THE CURRENT PAGE (Blazing fast: ~10-20ms)
+  // 2. ENRICH ONLY THE 7 ITEMS IN THE CURRENT PAGE (Blazing fast: ~1-5ms with in-memory memoization)
   const movies = await Promise.all(
     rawMovies.map(async (m) => {
       let displayTitle = m.frontmatter.title || m.slug;
@@ -338,7 +363,13 @@ export async function fetchPaginatedAdminContent(
 
       if (m.frontmatter.tmdb_id) {
         try {
-          const tmdb = await getMovieDetails(Number(m.frontmatter.tmdb_id)).catch(() => null);
+          const tmdbId = Number(m.frontmatter.tmdb_id);
+          const tmdb = await memoryCache.getOrFetch(
+            `admin_tmdb_movie_${tmdbId}`,
+            () => getMovieDetails(tmdbId).catch(() => null),
+            3600_000,
+            600_000
+          );
           if (tmdb) {
             if (tmdb.poster_path) tmdbPoster = getImageUrl(tmdb.poster_path, 'w500');
             if (!m.frontmatter.title && tmdb.title) displayTitle = tmdb.title;
@@ -378,7 +409,13 @@ export async function fetchPaginatedAdminContent(
 
       if (s.indexFrontmatter.tmdb_id) {
         try {
-          const tmdb = await getTVShowDetails(Number(s.indexFrontmatter.tmdb_id)).catch(() => null);
+          const tmdbId = Number(s.indexFrontmatter.tmdb_id);
+          const tmdb = await memoryCache.getOrFetch(
+            `admin_tmdb_tv_${tmdbId}`,
+            () => getTVShowDetails(tmdbId).catch(() => null),
+            3600_000,
+            600_000
+          );
           if (tmdb) {
             if (tmdb.poster_path) tmdbPoster = getImageUrl(tmdb.poster_path, 'w500');
             if (!s.indexFrontmatter.title && tmdb.name) displayTitle = tmdb.name;
@@ -1401,6 +1438,7 @@ export async function deleteAdminContent(pathsToDelete: string[], ghConfig: GitH
 
     const isTvShowIndex = isTV && (relativePath.endsWith('/_index.md') || relativePath.endsWith('/index.md'));
     const isTvDirectory = isTV && !relativePath.endsWith('.md') && !relativePath.endsWith('.markdown');
+    const isTvEpisode = isTV && !isTvShowIndex && (relativePath.endsWith('.md') || relativePath.endsWith('.markdown'));
 
     const folderToDelete = isTvShowIndex
       ? relativePath.replace(/\/_?index\.md$/i, '')
@@ -1408,14 +1446,24 @@ export async function deleteAdminContent(pathsToDelete: string[], ghConfig: GitH
       ? relativePath
       : null;
 
-    // Delete from MongoDB
+    // Delete from MongoDB & Disk with exact granular scope
     try {
       if (isMovie) {
         const slug = path.basename(relativePath).replace(/\.(md|markdown)$/i, '');
         await deleteMongoMovie(slug);
-      } else if (isTV) {
+      } else if (isTvShowIndex || isTvDirectory) {
         const showSlug = (folderToDelete || relativePath).replace(/^tv\//, '').split('/')[0];
         await deleteMongoTVShow(showSlug);
+      } else if (isTvEpisode) {
+        // e.g. tv/lanterns/s1/e1.md
+        const cleanRel = relativePath.replace(/^tv\//, '');
+        const parts = cleanRel.split('/');
+        const showSlug = parts[0];
+        const seasonFolder = parts[1] || 's1';
+        const episode = path.basename(parts[2] || parts[parts.length - 1] || '').replace(/\.(md|markdown)$/i, '');
+        if (showSlug && seasonFolder && episode) {
+          await deleteMongoEpisode(showSlug, seasonFolder, episode);
+        }
       }
     } catch (mErr) {
       console.warn('[deleteAdminContent] MongoDB delete notice:', mErr);

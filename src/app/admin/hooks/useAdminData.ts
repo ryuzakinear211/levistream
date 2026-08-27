@@ -7,10 +7,14 @@ import {
   ToastNotification,
 } from '../types';
 
+const adminClientCache = new Map<string, any>();
+
 export function useAdminData() {
   const [movies, setMovies] = useState<MovieItem[]>([]);
   const [tvShows, setTvShows] = useState<TVShowItem[]>([]);
+  const [pageLoading, setPageLoading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [activeTab, setActiveTab] = useState<'movies' | 'tv'>('movies');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -61,7 +65,7 @@ export function useAdminData() {
       setDebouncedSearch(searchQuery.trim());
       setMoviePage(1);
       setTvPage(1);
-    }, 300);
+    }, 250);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
@@ -105,10 +109,39 @@ export function useAdminData() {
 
   // Fetch paginated admin content
   const fetchContent = useCallback(
-    async (options: { silent?: boolean; customMoviePage?: number; customTvPage?: number } = {}) => {
-      if (!options.silent) setLoading(true);
+    async (options: { silent?: boolean; customMoviePage?: number; customTvPage?: number; force?: boolean } = {}) => {
       const mPage = options.customMoviePage !== undefined ? options.customMoviePage : moviePage;
       const tPage = options.customTvPage !== undefined ? options.customTvPage : tvPage;
+      const cacheKey = `${mPage}_${tPage}_${debouncedSearch}_${ITEMS_PER_PAGE}`;
+
+      if (options.force) {
+        adminClientCache.clear();
+        setLoading(true);
+        setPageLoading(true);
+      }
+
+      // Check client cache for instant render
+      if (adminClientCache.has(cacheKey) && !options.force) {
+        const cached = adminClientCache.get(cacheKey);
+        setMovies(cached.movies || []);
+        setTvShows(cached.tvShows || []);
+        setTotalMovies(cached.totalMovies || 0);
+        setTotalTvShows(cached.totalTvShows || 0);
+        setTotalMoviePages(cached.totalMoviePages || 1);
+        setTotalTvPages(cached.totalTvPages || 1);
+        setTotalAllMoviesCount(cached.totalAllMoviesCount !== undefined ? cached.totalAllMoviesCount : (cached.totalMovies || 0));
+        setTotalAllTvShowsCount(cached.totalAllTvShowsCount !== undefined ? cached.totalAllTvShowsCount : (cached.totalTvShows || 0));
+        setTotalEpisodesCount(cached.totalEpisodesCount || 0);
+        setLoading(false);
+        setPageLoading(false);
+        setIsInitialLoad(false);
+        return;
+      }
+
+      if (!options.silent) {
+        if (isInitialLoad) setLoading(true);
+        setPageLoading(true);
+      }
 
       try {
         const queryParams = new URLSearchParams({
@@ -126,6 +159,7 @@ export function useAdminData() {
 
         if (res.ok) {
           const data = await res.json();
+          adminClientCache.set(cacheKey, data);
           setMovies(data.movies || []);
           setTvShows(data.tvShows || []);
           setTotalMovies(data.totalMovies || 0);
@@ -135,6 +169,9 @@ export function useAdminData() {
           setTotalAllMoviesCount(data.totalAllMoviesCount !== undefined ? data.totalAllMoviesCount : (data.totalMovies || 0));
           setTotalAllTvShowsCount(data.totalAllTvShowsCount !== undefined ? data.totalAllTvShowsCount : (data.totalTvShows || 0));
           setTotalEpisodesCount(data.totalEpisodesCount || 0);
+          if (options.force) {
+            showToast('Data berhasil diperbarui!');
+          }
         } else {
           showToast('Gagal memuat konten admin', 'error');
         }
@@ -142,14 +179,57 @@ export function useAdminData() {
         showToast('Koneksi ke API admin gagal', 'error');
       } finally {
         setLoading(false);
+        setPageLoading(false);
+        setIsInitialLoad(false);
       }
     },
-    [getHeaders, activeTab, moviePage, tvPage, debouncedSearch, showToast]
+    [getHeaders, activeTab, moviePage, tvPage, debouncedSearch, isInitialLoad, showToast]
+  );
+
+  const handleMoviePageChange = useCallback(
+    (newPage: number) => {
+      setMoviePage(newPage);
+      const cacheKey = `${newPage}_${tvPage}_${debouncedSearch}_${ITEMS_PER_PAGE}`;
+      if (adminClientCache.has(cacheKey)) {
+        const cached = adminClientCache.get(cacheKey);
+        setMovies(cached.movies || []);
+        setTotalMovies(cached.totalMovies || 0);
+        setTotalMoviePages(cached.totalMoviePages || 1);
+        setTotalAllMoviesCount(cached.totalAllMoviesCount !== undefined ? cached.totalAllMoviesCount : (cached.totalMovies || 0));
+      } else {
+        setPageLoading(true);
+        fetchContent({ customMoviePage: newPage });
+      }
+    },
+    [tvPage, debouncedSearch, fetchContent]
+  );
+
+  const handleTvPageChange = useCallback(
+    (newPage: number) => {
+      setTvPage(newPage);
+      const cacheKey = `${moviePage}_${newPage}_${debouncedSearch}_${ITEMS_PER_PAGE}`;
+      if (adminClientCache.has(cacheKey)) {
+        const cached = adminClientCache.get(cacheKey);
+        setTvShows(cached.tvShows || []);
+        setTotalTvShows(cached.totalTvShows || 0);
+        setTotalTvPages(cached.totalTvPages || 1);
+        setTotalAllTvShowsCount(cached.totalAllTvShowsCount !== undefined ? cached.totalAllTvShowsCount : (cached.totalTvShows || 0));
+      } else {
+        setPageLoading(true);
+        fetchContent({ customTvPage: newPage });
+      }
+    },
+    [moviePage, debouncedSearch, fetchContent]
   );
 
   useEffect(() => {
     fetchContent();
   }, [fetchContent]);
+
+  // Handle instant, non-blocking tab switch
+  const handleTabSwitch = useCallback((tab: 'movies' | 'tv') => {
+    setActiveTab(tab);
+  }, []);
 
   // For backward compatibility and simplicity in components
   const paginatedMovies = movies;
@@ -173,9 +253,10 @@ export function useAdminData() {
     }
 
     showToast('Konten berhasil dibuat & live!');
+    adminClientCache.clear();
     setMoviePage(1);
     setTvPage(1);
-    fetchContent({ silent: true, customMoviePage: 1, customTvPage: 1 });
+    fetchContent({ silent: true, customMoviePage: 1, customTvPage: 1, force: true });
   };
 
   const handleEditSubmit = async (item: any) => {
@@ -198,7 +279,8 @@ export function useAdminData() {
     }
 
     showToast('Perubahan berhasil disimpan & live!');
-    fetchContent({ silent: true });
+    adminClientCache.clear();
+    fetchContent({ silent: true, force: true });
   };
 
   const handleDeleteConfirm = async () => {
@@ -219,7 +301,8 @@ export function useAdminData() {
       if (res.ok) {
         showToast(isBatch ? `${count} konten berhasil dihapus!` : 'Konten berhasil dihapus!');
         if (isBatch) setSelectedBatchPaths([]);
-        fetchContent({ silent: true });
+        adminClientCache.clear();
+        fetchContent({ silent: true, force: true });
       } else {
         if (result.requiresToken) setIsSettingsOpen(true);
         showToast(result.error || 'Gagal menghapus konten', 'error');
@@ -302,6 +385,7 @@ export function useAdminData() {
     movies,
     tvShows,
     loading,
+    pageLoading,
     activeTab,
     setActiveTab,
     searchQuery,
@@ -315,10 +399,10 @@ export function useAdminData() {
     totalAllMoviesCount,
     totalAllTvShowsCount,
     moviePage,
-    setMoviePage,
+    setMoviePage: handleMoviePageChange,
     totalMoviePages,
     tvPage,
-    setTvPage,
+    setTvPage: handleTvPageChange,
     totalTvPages,
     totalEpisodesCount,
     isCreateModalOpen,

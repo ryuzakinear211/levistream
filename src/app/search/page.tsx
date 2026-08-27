@@ -14,7 +14,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { Movie, TVShow } from '@/types/tmdb';
-import { searchMovies, searchTVShows, searchMulti, getTrending } from '@/lib/tmdb';
+import { searchMovies, searchTVShows, searchMulti, getTrending, prefetchImages } from '@/lib/tmdb';
 import MovieCard, { MovieCardSkeleton } from '@/components/MovieCard';
 
 function SearchContent() {
@@ -41,7 +41,11 @@ function SearchContent() {
     if (!query) {
       setTrendingLoading(true);
       getTrending(trendingTab, 'day')
-        .then((data) => setTrending(data.results.slice(0, 20) as (Movie | TVShow)[]))
+        .then((data) => {
+          const items = data.results.slice(0, 20) as (Movie | TVShow)[];
+          setTrending(items);
+          prefetchImages(items);
+        })
         .catch(() => setTrending([]))
         .finally(() => setTrendingLoading(false));
     }
@@ -67,8 +71,9 @@ function SearchContent() {
           data = await searchMulti(q, p);
         }
         setResults(data.results);
-        setTotalPages(Math.min(data.total_pages, 20));
+        setTotalPages(Math.min(data.total_pages, 500));
         setTotalResults(data.total_results);
+        prefetchImages(data.results);
       } catch {
         setResults([]);
       } finally {
@@ -119,8 +124,24 @@ function SearchContent() {
   };
 
   const handlePageChange = (newPage: number) => {
+    if (newPage === page || newPage < 1 || newPage > totalPages) return;
     setPage(newPage);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const getPageNumbers = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (page <= 4) {
+      return [1, 2, 3, 4, 5, '...', totalPages];
+    }
+    if (page >= totalPages - 3) {
+      return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, '...', page - 1, page, page + 1, '...', totalPages];
   };
 
   return (
@@ -322,36 +343,47 @@ function SearchContent() {
               })}
             </div>
 
-            {/* Pagination */}
+            {/* Pagination with Large Page Window and Go-To-Top */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-8 sm:mt-10 mb-2">
+              <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mt-8 sm:mt-10 mb-2">
+                {/* Prev button */}
                 <button
                   onClick={() => handlePageChange(page - 1)}
                   disabled={page === 1}
-                  className="p-2 rounded-xl transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed hover:scale-105"
+                  aria-label="Previous page"
+                  className="p-2 sm:px-3 sm:py-2 rounded-xl transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105"
                   style={{
                     background: 'rgba(255,255,255,0.06)',
                     border: '1px solid rgba(255,255,255,0.1)',
                     color: '#94a3b8',
                   }}
                 >
-                  <ChevronLeft size={20} />
+                  <ChevronLeft size={18} />
                 </button>
 
-                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                  let pageNum: number;
-                  if (totalPages <= 7) pageNum = i + 1;
-                  else if (page <= 4) pageNum = i + 1;
-                  else if (page >= totalPages - 3) pageNum = totalPages - 6 + i;
-                  else pageNum = page - 3 + i;
+                {/* Dynamic Page numbers with ellipsis */}
+                {getPageNumbers().map((item, idx) => {
+                  if (item === '...') {
+                    return (
+                      <span
+                        key={`ellipsis-${idx}`}
+                        className="w-8 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-xs sm:text-sm font-bold text-slate-500 select-none"
+                      >
+                        ...
+                      </span>
+                    );
+                  }
+
+                  const pageNum = item as number;
+                  const isCurrent = page === pageNum;
 
                   return (
                     <button
                       key={pageNum}
                       onClick={() => handlePageChange(pageNum)}
-                      className="w-10 h-10 rounded-xl text-sm font-semibold transition-all duration-200 hover:scale-105"
+                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 hover:scale-105"
                       style={
-                        page === pageNum
+                        isCurrent
                           ? {
                               background:
                                 searchType === 'tv'
@@ -375,17 +407,19 @@ function SearchContent() {
                   );
                 })}
 
+                {/* Next button */}
                 <button
                   onClick={() => handlePageChange(page + 1)}
                   disabled={page === totalPages}
-                  className="p-2 rounded-xl transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed hover:scale-105"
+                  aria-label="Next page"
+                  className="p-2 sm:px-3 sm:py-2 rounded-xl transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105"
                   style={{
                     background: 'rgba(255,255,255,0.06)',
                     border: '1px solid rgba(255,255,255,0.1)',
                     color: '#94a3b8',
                   }}
                 >
-                  <ChevronRight size={20} />
+                  <ChevronRight size={18} />
                 </button>
               </div>
             )}

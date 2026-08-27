@@ -7,6 +7,7 @@ import { getMovieDetails, getImageUrl, searchMovies } from '@/lib/tmdb';
 import siteConfig, { FeaturedItem } from '@/config';
 import { cleanVideoUrl, getMovieUrl } from '@/lib/urls';
 import { getMongoMovieBySlug, getMongoMovies } from '@/lib/mongodb/service';
+import { isMongoConfigured } from '@/lib/mongodb/client';
 import { memoryCache } from '@/lib/cache';
 
 export interface CustomMovieFrontmatter {
@@ -219,31 +220,34 @@ export function getCustomMovieSlugsByTmdbId(): Record<number, string> {
  */
 export async function getCustomMovieBySlug(slugOrId: string | number): Promise<CustomMovieData | null> {
   // 1. Check MongoDB first (Persistent Cloud Source of Truth)
-  try {
-    const mongoDoc = await getMongoMovieBySlug(slugOrId);
-    if (mongoDoc) {
-      const frontmatter: CustomMovieFrontmatter = {
-        title: mongoDoc.title,
-        tmdb_id: mongoDoc.tmdb_id,
-        rating: mongoDoc.rating,
-        deskripsi: mongoDoc.deskripsi,
-        videourl: mongoDoc.videourl,
-        image_url: mongoDoc.image_url,
-        featured: mongoDoc.featured,
-        subtitles: mongoDoc.subtitles,
-        duration: mongoDoc.duration,
-      };
-      const contentHtml = mongoDoc.content ? (marked.parse(mongoDoc.content) as string) : '';
-      return {
-        slug: mongoDoc.slug,
-        filename: `${mongoDoc.slug}.md`,
-        frontmatter,
-        contentHtml,
-        rawContent: mongoDoc.content || '',
-      };
+  if (isMongoConfigured()) {
+    try {
+      const mongoDoc = await getMongoMovieBySlug(slugOrId);
+      if (mongoDoc) {
+        const frontmatter: CustomMovieFrontmatter = {
+          title: mongoDoc.title,
+          tmdb_id: mongoDoc.tmdb_id,
+          rating: mongoDoc.rating,
+          deskripsi: mongoDoc.deskripsi,
+          videourl: mongoDoc.videourl,
+          image_url: mongoDoc.image_url,
+          featured: mongoDoc.featured,
+          subtitles: mongoDoc.subtitles,
+          duration: mongoDoc.duration,
+        };
+        const contentHtml = mongoDoc.content ? (marked.parse(mongoDoc.content) as string) : '';
+        return {
+          slug: mongoDoc.slug,
+          filename: `${mongoDoc.slug}.md`,
+          frontmatter,
+          contentHtml,
+          rawContent: mongoDoc.content || '',
+        };
+      }
+      return null;
+    } catch (mErr) {
+      console.warn('[markdownMovies] MongoDB getCustomMovieBySlug notice:', mErr);
     }
-  } catch (mErr) {
-    console.warn('[markdownMovies] MongoDB getCustomMovieBySlug notice:', mErr);
   }
 
   ensureContentDirExists();
@@ -544,7 +548,7 @@ export async function getAllFeaturedCustomMovies(): Promise<FeaturedItem[]> {
     'featured_custom_movies_list',
     async () => {
       try {
-        let mongoMovies = await getMongoMovies();
+        let mongoMovies = await getMongoMovies().catch(() => []);
         if (!mongoMovies || mongoMovies.length === 0) {
           ensureContentDirExists();
           const files = getAllCustomMovieFiles();
@@ -570,7 +574,7 @@ export async function getAllFeaturedCustomMovies(): Promise<FeaturedItem[]> {
           }).filter(Boolean) as any[];
         }
 
-        const featured = mongoMovies.filter((m) => Boolean(m.featured));
+        const featured = (mongoMovies || []).filter((m) => Boolean(m.featured));
         return await Promise.all(
           featured.map(async (m) => {
             let overview = (m.deskripsi || (m as any).description || (m as any).overview || '').trim();
@@ -581,7 +585,13 @@ export async function getAllFeaturedCustomMovies(): Promise<FeaturedItem[]> {
 
             if (m.tmdb_id) {
               try {
-                const tmdb = await getMovieDetails(Number(m.tmdb_id));
+                const tmdbId = Number(m.tmdb_id);
+                const tmdb = await memoryCache.getOrFetch(
+                  `admin_tmdb_movie_${tmdbId}`,
+                  () => getMovieDetails(tmdbId).catch(() => null),
+                  3600_000,
+                  600_000
+                );
                 if (tmdb) {
                   if (tmdb.poster_path) posterUrl = getImageUrl(tmdb.poster_path, 'w500');
                   if (tmdb.backdrop_path) backdropUrl = getImageUrl(tmdb.backdrop_path, 'w1280');
