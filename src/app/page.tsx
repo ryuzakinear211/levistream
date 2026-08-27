@@ -15,7 +15,7 @@ import { getAllCustomMoviesForList } from '@/lib/markdownMovies';
 import { getAllCustomTVShowsForList } from '@/lib/markdownTV';
 import siteConfig from '@/config';
 
-export const revalidate = 60;
+export const revalidate = 15;
 
 export default async function HomePage() {
   const [

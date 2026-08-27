@@ -548,30 +548,34 @@ export async function getAllFeaturedCustomMovies(): Promise<FeaturedItem[]> {
     'featured_custom_movies_list',
     async () => {
       try {
-        let mongoMovies = await getMongoMovies().catch(() => []);
-        if (!mongoMovies || mongoMovies.length === 0) {
+        let mongoMovies: any[] = [];
+        if (isMongoConfigured()) {
+          mongoMovies = await getMongoMovies().catch(() => []);
+        } else {
           ensureContentDirExists();
           const files = getAllCustomMovieFiles();
-          mongoMovies = files.map((file) => {
-            try {
-              const raw = fs.readFileSync(path.join(CONTENT_DIR, file), 'utf8');
-              const { data } = matter(raw);
-              return {
-                slug: file.replace(/\.(md|markdown)$/i, ''),
-                tmdb_id: Number(data.tmdb_id) || 0,
-                title: data.title || file.replace(/\.(md|markdown)$/i, ''),
-                videourl: cleanVideoUrl(data.videourl || data.video_url || '') || '',
-                image_url: data.image_url || data.poster_path || '',
-                deskripsi: data.deskripsi || data.overview || '',
-                rating: Number(data.rating) || 0,
-                featured: Boolean(data.featured),
-                createdAt: 0,
-                updatedAt: 0,
-              };
-            } catch {
-              return null;
-            }
-          }).filter(Boolean) as any[];
+          mongoMovies = files
+            .map((file) => {
+              try {
+                const raw = fs.readFileSync(path.join(CONTENT_DIR, file), 'utf8');
+                const { data } = matter(raw);
+                return {
+                  slug: file.replace(/\.(md|markdown)$/i, ''),
+                  tmdb_id: Number(data.tmdb_id) || 0,
+                  title: data.title || file.replace(/\.(md|markdown)$/i, ''),
+                  videourl: cleanVideoUrl(data.videourl || data.video_url || '') || '',
+                  image_url: data.image_url || data.poster_path || '',
+                  deskripsi: data.deskripsi || data.overview || '',
+                  rating: Number(data.rating) || 0,
+                  featured: Boolean(data.featured),
+                  createdAt: 0,
+                  updatedAt: 0,
+                };
+              } catch {
+                return null;
+              }
+            })
+            .filter(Boolean) as any[];
         }
 
         const featured = (mongoMovies || []).filter((m) => Boolean(m.featured));
@@ -632,8 +636,8 @@ export async function getAllFeaturedCustomMovies(): Promise<FeaturedItem[]> {
         return [];
       }
     },
-    120_000,
-    30_000
+    60_000,
+    15_000
   );
 }
 
@@ -645,7 +649,36 @@ export async function getAllCustomMoviesForList(): Promise<any[]> {
     'custom_movies_for_list',
     async () => {
       try {
-        const mongoMovies = await getMongoMovies();
+        let mongoMovies: any[] = [];
+        if (isMongoConfigured()) {
+          mongoMovies = await getMongoMovies().catch(() => []);
+        } else {
+          ensureContentDirExists();
+          const files = getAllCustomMovieFiles();
+          mongoMovies = files
+            .map((file) => {
+              try {
+                const raw = fs.readFileSync(path.join(CONTENT_DIR, file), 'utf8');
+                const { data } = matter(raw);
+                return {
+                  slug: file.replace(/\.(md|markdown)$/i, ''),
+                  tmdb_id: Number(data.tmdb_id) || 0,
+                  title: data.title || file.replace(/\.(md|markdown)$/i, ''),
+                  videourl: cleanVideoUrl(data.videourl || data.video_url || '') || '',
+                  image_url: data.image_url || data.poster_path || '',
+                  deskripsi: data.deskripsi || data.overview || '',
+                  rating: Number(data.rating) || 0,
+                  featured: Boolean(data.featured),
+                  createdAt: 0,
+                  updatedAt: 0,
+                };
+              } catch {
+                return null;
+              }
+            })
+            .filter(Boolean) as any[];
+        }
+
         return await Promise.all(
           mongoMovies.map(async (m) => {
             let poster: string | null = null;
@@ -690,7 +723,7 @@ export async function getAllCustomMoviesForList(): Promise<any[]> {
         return [];
       }
     },
-    120_000,
-    30_000
+    60_000,
+    15_000
   );
 }
