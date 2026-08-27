@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -12,20 +12,17 @@ import {
   Trash2,
   Play,
   Film,
-  Tv,
   Star,
   Clock,
-  Sparkles,
   ShieldCheck,
   Calendar,
-  Layers,
   ArrowRight,
   RefreshCw,
-  Eye,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
-import { useAuth, WatchlistItem, HistoryItem } from '@/context/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 import ProfileSkeleton from '@/components/skeletons/ProfileSkeleton';
-import siteConfig from '@/config';
 import { getImageUrl } from '@/lib/tmdb';
 
 function formatRelativeTime(timestamp?: number): string {
@@ -59,6 +56,9 @@ function formatJoinDate(dateVal?: string | number): string {
   }
 }
 
+const WATCHLIST_PER_PAGE = 12;
+const HISTORY_PER_PAGE = 10;
+
 export default function ProfilePageClient() {
   const {
     user,
@@ -78,6 +78,11 @@ export default function ProfilePageClient() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [confirmClearHistory, setConfirmClearHistory] = useState(false);
 
+  // Pagination states
+  const [watchlistPage, setWatchlistPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
+  const contentSectionRef = useRef<HTMLDivElement>(null);
+
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
     await refreshProfile();
@@ -87,6 +92,37 @@ export default function ProfilePageClient() {
   const handleClearAllHistory = async () => {
     await clearHistory();
     setConfirmClearHistory(false);
+    setHistoryPage(1);
+  };
+
+  // Watchlist Pagination calculations
+  const totalWatchlistPages = Math.max(1, Math.ceil(watchlist.length / WATCHLIST_PER_PAGE));
+  const paginatedWatchlist = useMemo(() => {
+    const start = (watchlistPage - 1) * WATCHLIST_PER_PAGE;
+    return watchlist.slice(start, start + WATCHLIST_PER_PAGE);
+  }, [watchlist, watchlistPage]);
+
+  // History Pagination calculations
+  const totalHistoryPages = Math.max(1, Math.ceil(history.length / HISTORY_PER_PAGE));
+  const paginatedHistory = useMemo(() => {
+    const start = (historyPage - 1) * HISTORY_PER_PAGE;
+    return history.slice(start, start + HISTORY_PER_PAGE);
+  }, [history, historyPage]);
+
+  const scrollToContent = () => {
+    if (contentSectionRef.current) {
+      contentSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const onWatchlistPageChange = (newPage: number) => {
+    setWatchlistPage(newPage);
+    scrollToContent();
+  };
+
+  const onHistoryPageChange = (newPage: number) => {
+    setHistoryPage(newPage);
+    scrollToContent();
   };
 
   // While checking initial session (and no local cache available), show smooth ProfileSkeleton
@@ -130,7 +166,7 @@ export default function ProfilePageClient() {
                   style={{
                     background: isLoggedIn
                       ? 'linear-gradient(135deg, #06b6d4, #7c3aed, #ec4899)'
-                      : 'linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05))',
+                      : 'linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05))',
                     boxShadow: isLoggedIn ? '0 0 25px rgba(6, 182, 212, 0.4)' : 'none',
                   }}
                 >
@@ -161,7 +197,7 @@ export default function ProfilePageClient() {
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
                   <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight">
-                    {isLoggedIn ? user?.username : 'Pengunjung (Guest)'}
+                    {isLoggedIn ? user?.username : 'Guest'}
                   </h1>
 
                   {/* Status Badge */}
@@ -172,7 +208,7 @@ export default function ProfilePageClient() {
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-500/20 border border-slate-500/30 text-slate-300">
-                      PREVIEW MODE
+                      Guest
                     </span>
                   )}
                 </div>
@@ -180,7 +216,7 @@ export default function ProfilePageClient() {
                 <p className="text-xs sm:text-sm text-slate-400">
                   {isLoggedIn
                     ? user?.email
-                    : 'Masuk ke akun Anda untuk menyimpan watchlist & riwayat secara otomatis.'}
+                    : 'Login untuk melihat riwayat tontonan & watchlist'}
                 </p>
 
                 {/* Meta details */}
@@ -257,11 +293,14 @@ export default function ProfilePageClient() {
         </div>
 
         {/* ── 2. TAB SWITCHER ── */}
-        <div className="flex items-center justify-between gap-4 border-b border-white/[0.08] pb-4">
+        <div ref={contentSectionRef} className="flex items-center justify-between gap-4 border-b border-white/[0.08] pb-4">
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Watchlist Tab Button */}
             <button
-              onClick={() => setActiveTab('watchlist')}
+              onClick={() => {
+                setActiveTab('watchlist');
+                setWatchlistPage(1);
+              }}
               className={`relative flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-2xl font-bold text-xs sm:text-sm transition-all duration-200 ${
                 activeTab === 'watchlist'
                   ? 'text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.2)]'
@@ -286,7 +325,10 @@ export default function ProfilePageClient() {
 
             {/* History Tab Button */}
             <button
-              onClick={() => setActiveTab('history')}
+              onClick={() => {
+                setActiveTab('history');
+                setHistoryPage(1);
+              }}
               className={`relative flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-2xl font-bold text-xs sm:text-sm transition-all duration-200 ${
                 activeTab === 'history'
                   ? 'text-purple-400 bg-purple-500/10 border border-purple-500/30 shadow-[0_0_15px_rgba(124,58,237,0.2)]'
@@ -342,7 +384,7 @@ export default function ProfilePageClient() {
 
         {/* ── TAB 1: WATCHLIST ── */}
         {activeTab === 'watchlist' && (
-          <div>
+          <div className="space-y-8">
             {!isLoggedIn ? (
               /* Guest Preview State for Watchlist */
               <div
@@ -368,7 +410,7 @@ export default function ProfilePageClient() {
                     Watchlist Pribadi
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                    Login untuk menyimpan dan melihat watchlist kamu. Semua film dan serial favoritmu akan tersimpan aman di akunmu dan dapat diakses dari perangkat mana pun.
+                    Login untuk melihat riwayat tontonan & watchlist. Semua film dan serial favoritmu akan tersimpan rapi di akunmu.
                   </p>
                 </div>
 
@@ -409,100 +451,167 @@ export default function ProfilePageClient() {
                 </Link>
               </div>
             ) : (
-              /* Watchlist Grid */
-              <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3.5 sm:gap-4.5 md:gap-5">
-                {watchlist.map((item) => {
-                  const targetUrl = item.urlPath || (item.type === 'tv' ? `/tv/${item.contentId}` : `/movie/${item.contentId}`);
-                  const posterSrc = item.posterPath
-                    ? item.posterPath.startsWith('http')
-                      ? item.posterPath
-                      : getImageUrl(item.posterPath, 'w500')
-                    : '/placeholder-poster.svg';
+              /* Watchlist Grid & Pagination */
+              <>
+                <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3.5 sm:gap-4.5 md:gap-5">
+                  {paginatedWatchlist.map((item) => {
+                    const targetUrl = item.urlPath || (item.type === 'tv' ? `/tv/${item.contentId}` : `/movie/${item.contentId}`);
+                    const posterSrc = item.posterPath
+                      ? item.posterPath.startsWith('http')
+                        ? item.posterPath
+                        : getImageUrl(item.posterPath, 'w500')
+                      : '/placeholder-poster.svg';
 
-                  return (
-                    <div
-                      key={String(item.contentId)}
-                      className="group relative flex flex-col rounded-2xl overflow-hidden bg-[#0c1226] border border-white/[0.08] hover:border-cyan-500/50 transition-all duration-300 hover:shadow-[0_8px_30px_rgba(6,182,212,0.2)] hover:-translate-y-1"
-                    >
-                      {/* Poster Container */}
-                      <Link href={targetUrl} className="relative aspect-[2/3] w-full overflow-hidden bg-slate-900 block">
-                        <Image
-                          src={posterSrc}
-                          alt={item.title}
-                          fill
-                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
-                          className="object-cover transition-transform duration-500 group-hover:scale-105"
-                        />
+                    return (
+                      <div
+                        key={String(item.contentId)}
+                        className="group relative flex flex-col rounded-2xl overflow-hidden bg-[#0c1226] border border-white/[0.08] hover:border-cyan-500/50 transition-all duration-300 hover:shadow-[0_8px_30px_rgba(6,182,212,0.2)] hover:-translate-y-1"
+                      >
+                        {/* Poster Container */}
+                        <Link href={targetUrl} className="relative aspect-[2/3] w-full overflow-hidden bg-slate-900 block">
+                          <Image
+                            src={posterSrc}
+                            alt={item.title}
+                            fill
+                            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
+                            className="object-cover transition-transform duration-500 group-hover:scale-105"
+                          />
 
-                        {/* Top Badges */}
-                        <div className="absolute top-2 left-2 flex items-center gap-1.5">
-                          <span
-                            className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider text-white shadow-md ${
-                              item.type === 'tv'
-                                ? 'bg-gradient-to-r from-pink-600 to-purple-600'
-                                : 'bg-gradient-to-r from-cyan-600 to-blue-600'
-                            }`}
-                          >
-                            {item.type === 'tv' ? 'Series' : 'Movie'}
-                          </span>
-                        </div>
-
-                        {/* Rating Badge */}
-                        {Boolean(item.rating) && item.rating! > 0 && (
-                          <div className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-black/70 backdrop-blur-md border border-amber-500/30 text-amber-300 text-[10px] font-black">
-                            <Star size={10} className="fill-amber-400 text-amber-400" />
-                            <span>{item.rating?.toFixed(1)}</span>
+                          {/* Top Badges */}
+                          <div className="absolute top-2 left-2 flex items-center gap-1.5">
+                            <span
+                              className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider text-white shadow-md ${
+                                item.type === 'tv'
+                                  ? 'bg-gradient-to-r from-pink-600 to-purple-600'
+                                  : 'bg-gradient-to-r from-cyan-600 to-blue-600'
+                              }`}
+                            >
+                              {item.type === 'tv' ? 'Series' : 'Movie'}
+                            </span>
                           </div>
-                        )}
 
-                        {/* Hover Overlay with Play Icon */}
-                        <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                          <div className="w-11 h-11 rounded-full bg-cyan-500 text-slate-950 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.8)] transform scale-75 group-hover:scale-100 transition-transform duration-300">
-                            <Play size={18} className="fill-current ml-0.5" />
+                          {/* Rating Badge */}
+                          {Boolean(item.rating) && item.rating! > 0 && (
+                            <div className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-black/70 backdrop-blur-md border border-amber-500/30 text-amber-300 text-[10px] font-black">
+                              <Star size={10} className="fill-amber-400 text-amber-400" />
+                              <span>{item.rating?.toFixed(1)}</span>
+                            </div>
+                          )}
+
+                          {/* Hover Overlay with Play Icon */}
+                          <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                            <div className="w-11 h-11 rounded-full bg-cyan-500 text-slate-950 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.8)] transform scale-75 group-hover:scale-100 transition-transform duration-300">
+                              <Play size={18} className="fill-current ml-0.5" />
+                            </div>
                           </div>
-                        </div>
-                      </Link>
-
-                      {/* Info & Remove Button */}
-                      <div className="p-3 flex flex-col justify-between flex-1 gap-2">
-                        <Link href={targetUrl} className="block">
-                          <h4 className="text-xs sm:text-sm font-bold text-white line-clamp-1 group-hover:text-cyan-400 transition-colors">
-                            {item.title}
-                          </h4>
-                          <p className="text-[10px] text-slate-400">
-                            {item.releaseDate ? item.releaseDate.slice(0, 4) : '2026'}
-                          </p>
                         </Link>
 
-                        <div className="flex items-center justify-between pt-1 border-t border-white/[0.06]">
-                          <Link
-                            href={targetUrl}
-                            className="text-[11px] font-bold text-cyan-400 hover:underline flex items-center gap-1"
-                          >
-                            <span>Tonton</span>
-                            <ArrowRight size={11} />
+                        {/* Info & Remove Button */}
+                        <div className="p-3 flex flex-col justify-between flex-1 gap-2">
+                          <Link href={targetUrl} className="block">
+                            <h4 className="text-xs sm:text-sm font-bold text-white line-clamp-1 group-hover:text-cyan-400 transition-colors">
+                              {item.title}
+                            </h4>
+                            <p className="text-[10px] text-slate-400">
+                              {item.releaseDate ? item.releaseDate.slice(0, 4) : '2026'}
+                            </p>
                           </Link>
 
-                          <button
-                            onClick={() => removeFromWatchlist(item.contentId)}
-                            className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                            title="Hapus dari Watchlist"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                          <div className="flex items-center justify-between pt-1 border-t border-white/[0.06]">
+                            <Link
+                              href={targetUrl}
+                              className="text-[11px] font-bold text-cyan-400 hover:underline flex items-center gap-1"
+                            >
+                              <span>Tonton</span>
+                              <ArrowRight size={11} />
+                            </Link>
+
+                            <button
+                              onClick={() => removeFromWatchlist(item.contentId)}
+                              className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                              title="Hapus dari Watchlist"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </div>
                       </div>
+                    );
+                  })}
+                </div>
+
+                {/* Watchlist Pagination Controls */}
+                {totalWatchlistPages > 1 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-white/[0.06]">
+                    <p className="text-xs text-slate-400 text-center sm:text-left">
+                      Menampilkan <span className="text-white font-bold">{paginatedWatchlist.length}</span> dari{' '}
+                      <span className="text-white font-bold">{watchlist.length}</span> item tersimpan
+                    </p>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => onWatchlistPageChange(watchlistPage - 1)}
+                        disabled={watchlistPage === 1}
+                        className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-slate-300 hover:text-white disabled:opacity-40 disabled:pointer-events-none transition-all flex items-center gap-1"
+                      >
+                        <ChevronLeft size={14} />
+                        <span>Prev</span>
+                      </button>
+
+                      <div className="flex items-center gap-1 px-1">
+                        {Array.from({ length: totalWatchlistPages }).map((_, idx) => {
+                          const p = idx + 1;
+                          const isActive = p === watchlistPage;
+                          // Display smart range
+                          if (
+                            p === 1 ||
+                            p === totalWatchlistPages ||
+                            (p >= watchlistPage - 1 && p <= watchlistPage + 1)
+                          ) {
+                            return (
+                              <button
+                                key={p}
+                                onClick={() => onWatchlistPageChange(p)}
+                                className={`w-8 h-8 rounded-xl text-xs font-bold transition-all ${
+                                  isActive
+                                    ? 'bg-cyan-500 text-slate-950 shadow-[0_0_12px_rgba(6,182,212,0.5)]'
+                                    : 'bg-white/[0.04] text-slate-300 hover:bg-white/[0.08] hover:text-white border border-white/5'
+                                }`}
+                              >
+                                {p}
+                              </button>
+                            );
+                          }
+                          if (p === watchlistPage - 2 || p === watchlistPage + 2) {
+                            return (
+                              <span key={p} className="text-slate-600 text-xs px-0.5">
+                                •
+                              </span>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+
+                      <button
+                        onClick={() => onWatchlistPageChange(watchlistPage + 1)}
+                        disabled={watchlistPage === totalWatchlistPages}
+                        className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-slate-300 hover:text-white disabled:opacity-40 disabled:pointer-events-none transition-all flex items-center gap-1"
+                      >
+                        <span>Next</span>
+                        <ChevronRight size={14} />
+                      </button>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
 
         {/* ── TAB 2: HISTORY ── */}
         {activeTab === 'history' && (
-          <div>
+          <div className="space-y-8">
             {!isLoggedIn ? (
               /* Guest Preview State for History */
               <div
@@ -528,7 +637,7 @@ export default function ProfilePageClient() {
                     Riwayat Tontonan
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                    Login untuk melihat riwayat tontonan kamu. Lanjutkan film atau episode serial yang sedang kamu tonton kapan saja tanpa takut terlewat.
+                    Login untuk melihat riwayat tontonan & watchlist. Lanjutkan film atau episode serial yang sedang kamu tonton kapan saja tanpa takut terlewat.
                   </p>
                 </div>
 
@@ -569,87 +678,153 @@ export default function ProfilePageClient() {
                 </Link>
               </div>
             ) : (
-              /* History Timeline Grid */
-              <div className="space-y-3 sm:space-y-4">
-                {history.map((item) => {
-                  const targetUrl = item.urlPath || (item.type === 'tv' ? `/tv/${item.contentId}` : `/movie/${item.contentId}`);
-                  const posterSrc = item.posterPath
-                    ? item.posterPath.startsWith('http')
-                      ? item.posterPath
-                      : getImageUrl(item.posterPath, 'w500')
-                    : '/placeholder-poster.svg';
+              /* History Timeline Grid & Pagination */
+              <>
+                <div className="space-y-3 sm:space-y-4">
+                  {paginatedHistory.map((item) => {
+                    const targetUrl = item.urlPath || (item.type === 'tv' ? `/tv/${item.contentId}` : `/movie/${item.contentId}`);
+                    const posterSrc = item.posterPath
+                      ? item.posterPath.startsWith('http')
+                        ? item.posterPath
+                        : getImageUrl(item.posterPath, 'w500')
+                      : '/placeholder-poster.svg';
 
-                  return (
-                    <div
-                      key={`${item.contentId}-${item.viewedAt}`}
-                      className="group relative flex items-center justify-between gap-4 p-3 sm:p-4 rounded-2xl bg-[#0c1226] border border-white/[0.08] hover:border-purple-500/40 hover:bg-white/[0.03] transition-all duration-200"
-                    >
-                      {/* Left: Thumbnail & Info */}
-                      <Link href={targetUrl} className="flex items-center gap-3.5 sm:gap-4 flex-1 min-w-0">
-                        {/* Thumbnail */}
-                        <div className="relative w-16 sm:w-20 aspect-[16/10] rounded-xl overflow-hidden bg-slate-900 flex-shrink-0">
-                          <Image
-                            src={posterSrc}
-                            alt={item.title}
-                            fill
-                            sizes="120px"
-                            className="object-cover transition-transform duration-300 group-hover:scale-105"
-                          />
-                          <div className="absolute inset-0 bg-slate-950/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Play size={14} className="text-cyan-400 fill-cyan-400" />
-                          </div>
-                        </div>
-
-                        {/* Title & Metadata */}
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider text-white ${
-                                item.type === 'tv' ? 'bg-pink-600' : 'bg-cyan-600'
-                              }`}
-                            >
-                              {item.type === 'tv' ? 'Series' : 'Movie'}
-                            </span>
-                            <h4 className="text-xs sm:text-sm font-bold text-white truncate group-hover:text-purple-400 transition-colors">
-                              {item.title}
-                            </h4>
+                    return (
+                      <div
+                        key={`${item.contentId}-${item.viewedAt}`}
+                        className="group relative flex items-center justify-between gap-4 p-3 sm:p-4 rounded-2xl bg-[#0c1226] border border-white/[0.08] hover:border-purple-500/40 hover:bg-white/[0.03] transition-all duration-200"
+                      >
+                        {/* Left: Thumbnail & Info */}
+                        <Link href={targetUrl} className="flex items-center gap-3.5 sm:gap-4 flex-1 min-w-0">
+                          {/* Thumbnail */}
+                          <div className="relative w-16 sm:w-20 aspect-[16/10] rounded-xl overflow-hidden bg-slate-900 flex-shrink-0">
+                            <Image
+                              src={posterSrc}
+                              alt={item.title}
+                              fill
+                              sizes="120px"
+                              className="object-cover transition-transform duration-300 group-hover:scale-105"
+                            />
+                            <div className="absolute inset-0 bg-slate-950/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Play size={14} className="text-cyan-400 fill-cyan-400" />
+                            </div>
                           </div>
 
-                          {item.episodeTitle && (
-                            <p className="text-[11px] font-semibold text-purple-300 truncate">
-                              {item.episodeTitle}
+                          {/* Title & Metadata */}
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider text-white ${
+                                  item.type === 'tv' ? 'bg-pink-600' : 'bg-cyan-600'
+                                }`}
+                              >
+                                {item.type === 'tv' ? 'Series' : 'Movie'}
+                              </span>
+                              <h4 className="text-xs sm:text-sm font-bold text-white truncate group-hover:text-purple-400 transition-colors">
+                                {item.title}
+                              </h4>
+                            </div>
+
+                            {item.episodeTitle && (
+                              <p className="text-[11px] font-semibold text-purple-300 truncate">
+                                {item.episodeTitle}
+                              </p>
+                            )}
+
+                            <p className="text-[10px] text-slate-400 flex items-center gap-1.5">
+                              <Clock size={10} className="text-slate-400" />
+                              <span>Ditonton {formatRelativeTime(item.viewedAt)}</span>
                             </p>
-                          )}
-
-                          <p className="text-[10px] text-slate-400 flex items-center gap-1.5">
-                            <Clock size={10} className="text-slate-400" />
-                            <span>Ditonton {formatRelativeTime(item.viewedAt)}</span>
-                          </p>
-                        </div>
-                      </Link>
-
-                      {/* Right: Quick Action Buttons */}
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <Link
-                          href={targetUrl}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs text-white bg-purple-500/20 hover:bg-purple-500/40 border border-purple-500/30 transition-colors"
-                        >
-                          <Play size={12} className="fill-current" />
-                          <span className="hidden sm:inline">Lanjutkan</span>
+                          </div>
                         </Link>
 
-                        <button
-                          onClick={() => removeFromHistory(item.contentId)}
-                          className="p-1.5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                          title="Hapus dari Riwayat"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {/* Right: Quick Action Buttons */}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <Link
+                            href={targetUrl}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs text-white bg-purple-500/20 hover:bg-purple-500/40 border border-purple-500/30 transition-colors"
+                          >
+                            <Play size={12} className="fill-current" />
+                            <span className="hidden sm:inline">Lanjutkan</span>
+                          </Link>
+
+                          <button
+                            onClick={() => removeFromHistory(item.contentId)}
+                            className="p-1.5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                            title="Hapus dari Riwayat"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
+                    );
+                  })}
+                </div>
+
+                {/* History Pagination Controls */}
+                {totalHistoryPages > 1 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-white/[0.06]">
+                    <p className="text-xs text-slate-400 text-center sm:text-left">
+                      Menampilkan <span className="text-white font-bold">{paginatedHistory.length}</span> dari{' '}
+                      <span className="text-white font-bold">{history.length}</span> riwayat tontonan
+                    </p>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => onHistoryPageChange(historyPage - 1)}
+                        disabled={historyPage === 1}
+                        className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-slate-300 hover:text-white disabled:opacity-40 disabled:pointer-events-none transition-all flex items-center gap-1"
+                      >
+                        <ChevronLeft size={14} />
+                        <span>Prev</span>
+                      </button>
+
+                      <div className="flex items-center gap-1 px-1">
+                        {Array.from({ length: totalHistoryPages }).map((_, idx) => {
+                          const p = idx + 1;
+                          const isActive = p === historyPage;
+                          if (
+                            p === 1 ||
+                            p === totalHistoryPages ||
+                            (p >= historyPage - 1 && p <= historyPage + 1)
+                          ) {
+                            return (
+                              <button
+                                key={p}
+                                onClick={() => onHistoryPageChange(p)}
+                                className={`w-8 h-8 rounded-xl text-xs font-bold transition-all ${
+                                  isActive
+                                    ? 'bg-purple-500 text-white shadow-[0_0_12px_rgba(124,58,237,0.5)]'
+                                    : 'bg-white/[0.04] text-slate-300 hover:bg-white/[0.08] hover:text-white border border-white/5'
+                                }`}
+                              >
+                                {p}
+                              </button>
+                            );
+                          }
+                          if (p === historyPage - 2 || p === historyPage + 2) {
+                            return (
+                              <span key={p} className="text-slate-600 text-xs px-0.5">
+                                •
+                              </span>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+
+                      <button
+                        onClick={() => onHistoryPageChange(historyPage + 1)}
+                        disabled={historyPage === totalHistoryPages}
+                        className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-slate-300 hover:text-white disabled:opacity-40 disabled:pointer-events-none transition-all flex items-center gap-1"
+                      >
+                        <span>Next</span>
+                        <ChevronRight size={14} />
+                      </button>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -660,4 +835,3 @@ export default function ProfilePageClient() {
 }
 
 export { ProfilePageClient };
-
