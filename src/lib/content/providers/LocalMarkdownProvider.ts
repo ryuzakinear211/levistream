@@ -15,6 +15,11 @@ import {
 } from '../types';
 import { memoryCache } from '@/lib/cache';
 import { slugify } from '@/lib/urls';
+import {
+  serializeTinaMovie,
+  serializeTinaTVShow,
+  serializeTinaTVEpisode,
+} from '@/lib/tina/schema';
 
 const VIDEO_DIR = path.join(process.cwd(), 'video');
 const TV_DIR = path.join(process.cwd(), 'tv');
@@ -332,7 +337,7 @@ export class LocalMarkdownProvider implements IContentProvider {
     const filePath = path.join(VIDEO_DIR, `${cleanSlug}.md`);
     const isUpdate = fs.existsSync(filePath);
 
-    const fileContent = matter.stringify(payload.content || '', payload.frontmatter);
+    const fileContent = serializeTinaMovie(payload.frontmatter, payload.content || '');
     fs.writeFileSync(filePath, fileContent, 'utf8');
 
     this.invalidateCache();
@@ -347,7 +352,7 @@ export class LocalMarkdownProvider implements IContentProvider {
     const indexPath = path.join(showDir, '_index.md');
     const isUpdate = fs.existsSync(indexPath);
 
-    const fileContent = matter.stringify(payload.content || '', payload.frontmatter);
+    const fileContent = serializeTinaTVShow(payload.frontmatter, payload.content || '');
     fs.writeFileSync(indexPath, fileContent, 'utf8');
 
     this.invalidateCache();
@@ -363,7 +368,7 @@ export class LocalMarkdownProvider implements IContentProvider {
     const epPath = path.join(seasonDir, epFile);
     const isUpdate = fs.existsSync(epPath);
 
-    const fileContent = matter.stringify(payload.content || '', payload.frontmatter);
+    const fileContent = serializeTinaTVEpisode(payload.frontmatter, payload.content || '');
     fs.writeFileSync(epPath, fileContent, 'utf8');
 
     this.invalidateCache();

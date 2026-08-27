@@ -36,7 +36,7 @@ export class HeadlessCMSProvider implements IContentProvider {
       const res = await fetch(url, {
         headers: this.apiToken ? { Authorization: `Bearer ${this.apiToken}` } : {},
         next: { revalidate: 60 },
-      });
+      } as any);
       if (!res.ok) return null;
       return (await res.json()) as T;
     } catch (e) {

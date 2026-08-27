@@ -6,12 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "tina:dev": "tinacms dev -c \"next dev\"",
+    "tina:build": "tinacms build"
   },
   "dependencies": {
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",
     "gray-matter": "^4.0.3",
     "hls.js": "^1.7.1",
@@ -26,6 +25,13 @@
     "react-dom": "^18",
     "swiper": "^14.1.0",
     "tailwindcss": "^3.4.1",
+    "tinacms": "^2.2.8",
     "typescript": "^5"
+  },
+  "devDependencies": {
+    "@tinacms/cli": "^1.6.4",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18"
   }
 }

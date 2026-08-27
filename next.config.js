@@ -10,7 +10,6 @@ const nextConfig = {
         pathname: '/t/p/**',
       },
     ],
-    // Format modern untuk performa lebih baik
     formats: ['image/avif', 'image/webp'],
   },
 
@@ -18,9 +17,22 @@ const nextConfig = {
   compress: true,
   swcMinify: true,
 
-  // Tree-shaking lucide-react agar bundle lebih kecil
+  // Optimasi tree-shaking untuk modul berat
   experimental: {
-    optimizePackageImports: ['lucide-react'],
+    optimizePackageImports: ['lucide-react', 'tinacms'],
+  },
+
+  // Optimasi webpack bundler untuk client/server separation
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        child_process: false,
+      };
+    }
+    return config;
   },
 
   // Header security untuk production

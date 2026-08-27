@@ -69,18 +69,14 @@ export function getAllCustomMovieFiles(): string[] {
   }
 }
 
-/**
- * Gets all markdown files asynchronously, discovering live files from GitHub API in production/Vercel.
- */
 export async function getAllCustomMovieFilesAsync(): Promise<string[]> {
   const localFiles = getAllCustomMovieFiles();
   if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
     try {
       const ghFiles = await listGitHubDir('video');
       const mdFiles = ghFiles.filter((file) => file.endsWith('.md') || file.endsWith('.markdown'));
-      if (mdFiles.length > 0) {
-        return Array.from(new Set([...mdFiles, ...localFiles]));
-      }
+      const combined = Array.from(new Set([...localFiles, ...mdFiles]));
+      if (combined.length > 0) return combined;
     } catch {}
   }
   return localFiles;
@@ -531,61 +527,66 @@ export async function getMovieDetailsWithCustomOverride(
  */
 export async function getAllFeaturedCustomMovies(): Promise<FeaturedItem[]> {
   const files = await getAllCustomMovieFilesAsync();
-  const featuredMovies: FeaturedItem[] = [];
+  const results = await Promise.all(
+    files.map(async (file) => {
+      try {
+        const baseSlug = file.replace(/\.(md|markdown)$/i, '');
+        const customData = await getCustomMovieBySlug(baseSlug);
 
-  for (const file of files) {
-    try {
-      const baseSlug = file.replace(/\.(md|markdown)$/i, '');
-      const customData = await getCustomMovieBySlug(baseSlug);
+        if (
+          customData &&
+          (customData.frontmatter.featured === true ||
+            customData.frontmatter.featured === 'true' ||
+            customData.frontmatter.featured === '1')
+        ) {
+          const detail = await getMovieDetailsWithCustomOverride(baseSlug);
+          if (detail) {
+            const customImg =
+              detail.customImageUrl ||
+              customData.frontmatter.image_url ||
+              customData.frontmatter.poster_path ||
+              customData.frontmatter.backdrop_url;
+            const backdrop = customImg
+              ? getImageUrl(customImg, 'w1280')
+              : detail.backdrop_path
+              ? getImageUrl(detail.backdrop_path, 'w1280')
+              : detail.poster_path
+              ? getImageUrl(detail.poster_path, 'w780')
+              : '/placeholder-poster.svg';
+            const poster = customImg
+              ? getImageUrl(customImg, 'w500')
+              : detail.poster_path
+              ? getImageUrl(detail.poster_path, 'w500')
+              : detail.backdrop_path
+              ? getImageUrl(detail.backdrop_path, 'w780')
+              : '/placeholder-poster.svg';
 
-      if (
-        customData &&
-        (customData.frontmatter.featured === true ||
-          customData.frontmatter.featured === 'true' ||
-          customData.frontmatter.featured === '1')
-      ) {
-        const detail = await getMovieDetailsWithCustomOverride(baseSlug);
-        if (detail) {
-          const customImg = detail.customImageUrl || customData.frontmatter.image_url || customData.frontmatter.poster_path || customData.frontmatter.backdrop_url;
-          const backdrop = customImg
-            ? getImageUrl(customImg, 'w1280')
-            : detail.backdrop_path
-            ? getImageUrl(detail.backdrop_path, 'w1280')
-            : detail.poster_path
-            ? getImageUrl(detail.poster_path, 'w780')
-            : '/placeholder-poster.svg';
-          const poster = customImg
-            ? getImageUrl(customImg, 'w500')
-            : detail.poster_path
-            ? getImageUrl(detail.poster_path, 'w500')
-            : detail.backdrop_path
-            ? getImageUrl(detail.backdrop_path, 'w780')
-            : '/placeholder-poster.svg';
-
-          featuredMovies.push({
-            id: `movie-${detail.customSlug || detail.id}`,
-            tmdbId: detail.id,
-            title: detail.title,
-            tagline: detail.tagline || undefined,
-            overview: detail.overview,
-            backdropUrl: backdrop,
-            posterUrl: poster,
-            rating: Math.round(detail.vote_average * 10) / 10,
-            year: detail.release_date ? new Date(detail.release_date).getFullYear() : '2026',
-            duration: detail.runtime ? `${Math.floor(detail.runtime / 60)}h ${detail.runtime % 60}m` : undefined,
-            type: 'movie' as const,
-            genres: detail.genres?.map((g) => g.name) || [],
-            link: getMovieUrl(detail),
-            badge: 'Featured',
-            featured: true,
-            isCustom: true,
-          });
+            return {
+              id: `movie-${detail.customSlug || detail.id}`,
+              tmdbId: detail.id,
+              title: detail.title,
+              tagline: detail.tagline || undefined,
+              overview: detail.overview,
+              backdropUrl: backdrop,
+              posterUrl: poster,
+              rating: Math.round(detail.vote_average * 10) / 10,
+              year: detail.release_date ? new Date(detail.release_date).getFullYear() : '2026',
+              duration: detail.runtime ? `${Math.floor(detail.runtime / 60)}h ${detail.runtime % 60}m` : undefined,
+              type: 'movie' as const,
+              genres: detail.genres?.map((g) => g.name) || [],
+              link: getMovieUrl(detail),
+              badge: 'Featured',
+              featured: true,
+              isCustom: true,
+            } as FeaturedItem;
+          }
         }
+      } catch (err) {
+        console.error(`Error loading featured custom movie for ${file}:`, err);
       }
-    } catch (err) {
-      console.error(`Error loading featured custom movie for ${file}:`, err);
-    }
-  }
+      return null;
+    })
+  );
 
-  return featuredMovies;
+  return results.filter((item): item is FeaturedItem => item !== null);
 }

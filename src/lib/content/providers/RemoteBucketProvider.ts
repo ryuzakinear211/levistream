@@ -41,7 +41,7 @@ export class RemoteBucketProvider implements IContentProvider {
       const res = await fetch(url, {
         headers: this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {},
         next: { revalidate: 60 },
-      });
+      } as any);
       if (!res.ok) return null;
       return (await res.json()) as T;
     } catch (e) {

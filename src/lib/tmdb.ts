@@ -34,7 +34,7 @@ async function fetchTMDB<T>(endpoint: string, params: Record<string, string> = {
 
       const response = await fetch(url.toString(), {
         next: { revalidate: 3600 },
-      });
+      } as any);
 
       if (!response.ok) {
         throw new Error(`TMDB API error: ${response.status} ${response.statusText} for ${endpoint}`);
