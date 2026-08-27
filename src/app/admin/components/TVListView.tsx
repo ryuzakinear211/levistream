@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   Play,
   Film,
+  Star,
 } from 'lucide-react';
 import { TVShowItem, TVEpisodeItem } from '../types';
 import { getTVUrl } from '@/lib/urls';
@@ -213,6 +214,11 @@ export const TVListView: React.FC<TVListViewProps> = ({
                       <span className="px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-pink-500/10 text-pink-400 border border-pink-500/30">
                         TMDB {tmdbId}
                       </span>
+                      {Boolean(show.frontmatter.featured) && (
+                        <span className="px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                          <Star size={10} fill="currentColor" /> Featured
+                        </span>
+                      )}
                       <span className="px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/30">
                         {show.episodes.length} Episode
                       </span>

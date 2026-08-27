@@ -57,23 +57,20 @@ export default async function HomePage() {
     ...trendingTV.filter((t: any) => !customTV.some((ct: any) => ct.id === t.id || ct.customSlug === String(t.id))),
   ];
 
-  // Enriched, deduplicated featured movies only for Home Page
+  // Enriched custom featured movies only for Home Page Hero
   const featuredItems = await getEnrichedFeaturedMovies({
-    dynamicFallbackMovies: trending,
     maxItems: 6,
   });
 
-  const featuredMovie = trending[0] || popular[0];
-
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-clip overflow-x-hidden" style={{ background: '#050816' }}>
-      {/* Hero with Enriched & Deduplicated Featured Items Carousel */}
-      <Hero
-        movie={featuredMovie}
-        movies={trending}
-        genres={genreList}
-        customFeaturedItems={featuredItems}
-      />
+      {/* Hero with Enriched Custom Featured Items Carousel */}
+      {featuredItems.length > 0 && (
+        <Hero
+          genres={genreList}
+          customFeaturedItems={featuredItems}
+        />
+      )}
 
       {/* Content sections */}
       <div className="relative z-10 space-y-10 pb-6 sm:pb-8 pt-2 sm:pt-4">

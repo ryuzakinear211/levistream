@@ -801,46 +801,56 @@ export async function getAllFeaturedCustomTV(): Promise<FeaturedItem[]> {
         let mongoShows: any[] = [];
         if (isMongoConfigured()) {
           mongoShows = await getMongoTVShows().catch(() => []);
-        } else {
-          ensureTVDirExists();
-          const showDirs = fs.existsSync(TV_CONTENT_DIR)
-            ? fs.readdirSync(TV_CONTENT_DIR, { withFileTypes: true })
-                .filter((d) => d.isDirectory())
-                .map((d) => d.name)
-            : [];
-
-          mongoShows = showDirs
-            .map((showDir) => {
-              try {
-                const showPath = path.join(TV_CONTENT_DIR, showDir);
-                const indexPath = fs.existsSync(path.join(showPath, '_index.md'))
-                  ? path.join(showPath, '_index.md')
-                  : fs.existsSync(path.join(showPath, 'index.md'))
-                  ? path.join(showPath, 'index.md')
-                  : null;
-                if (indexPath) {
-                  const raw = fs.readFileSync(indexPath, 'utf8');
-                  const { data } = matter(raw);
-                  return {
-                    showSlug: showDir,
-                    tmdb_id: Number(data.tmdb_id) || 0,
-                    title: data.title || showDir,
-                    image_url: data.image_url || data.poster_path || '',
-                    deskripsi: data.deskripsi || data.overview || '',
-                    rating: Number(data.rating) || 0,
-                    featured: Boolean(data.featured),
-                    episodes: [],
-                    createdAt: 0,
-                    updatedAt: 0,
-                  };
-                }
-              } catch {}
-              return null;
-            })
-            .filter(Boolean) as any[];
         }
 
-        const featured = (mongoShows || []).filter((s) => Boolean(s.featured));
+        // Always scan local disk files and merge with MongoDB to ensure zero data loss during cache/DB sync
+        ensureTVDirExists();
+        const showDirs = fs.existsSync(TV_CONTENT_DIR)
+          ? fs.readdirSync(TV_CONTENT_DIR, { withFileTypes: true })
+              .filter((d) => d.isDirectory())
+              .map((d) => d.name)
+          : [];
+
+        const diskShows = showDirs
+          .map((showDir) => {
+            try {
+              const showPath = path.join(TV_CONTENT_DIR, showDir);
+              const indexPath = fs.existsSync(path.join(showPath, '_index.md'))
+                ? path.join(showPath, '_index.md')
+                : fs.existsSync(path.join(showPath, 'index.md'))
+                ? path.join(showPath, 'index.md')
+                : null;
+              if (indexPath) {
+                const raw = fs.readFileSync(indexPath, 'utf8');
+                const { data } = matter(raw);
+                return {
+                  showSlug: showDir,
+                  tmdb_id: Number(data.tmdb_id) || 0,
+                  title: data.title || showDir,
+                  image_url: data.image_url || data.poster_path || '',
+                  deskripsi: data.deskripsi || data.overview || '',
+                  rating: Number(data.rating) || 0,
+                  featured: Boolean(data.featured),
+                  episodes: [],
+                  createdAt: 0,
+                  updatedAt: 0,
+                };
+              }
+            } catch {}
+            return null;
+          })
+          .filter(Boolean) as any[];
+
+        const showsMap = new Map<string, any>();
+        for (const ds of diskShows) {
+          showsMap.set(ds.showSlug, ds);
+        }
+        for (const ms of mongoShows) {
+          showsMap.set(ms.showSlug, ms);
+        }
+
+        const allShows = Array.from(showsMap.values());
+        const featured = allShows.filter((s) => Boolean(s.featured));
         return await Promise.all(
           featured.map(async (s) => {
             let overview = (s.deskripsi || (s as any).description || '').trim();

@@ -559,34 +559,44 @@ export async function getAllFeaturedCustomMovies(): Promise<FeaturedItem[]> {
         let mongoMovies: any[] = [];
         if (isMongoConfigured()) {
           mongoMovies = await getMongoMovies().catch(() => []);
-        } else {
-          ensureContentDirExists();
-          const files = getAllCustomMovieFiles();
-          mongoMovies = files
-            .map((file) => {
-              try {
-                const raw = fs.readFileSync(path.join(CONTENT_DIR, file), 'utf8');
-                const { data } = matter(raw);
-                return {
-                  slug: file.replace(/\.(md|markdown)$/i, ''),
-                  tmdb_id: Number(data.tmdb_id) || 0,
-                  title: data.title || file.replace(/\.(md|markdown)$/i, ''),
-                  videourl: cleanVideoUrl(data.videourl || data.video_url || '') || '',
-                  image_url: data.image_url || data.poster_path || '',
-                  deskripsi: data.deskripsi || data.overview || '',
-                  rating: Number(data.rating) || 0,
-                  featured: Boolean(data.featured),
-                  createdAt: 0,
-                  updatedAt: 0,
-                };
-              } catch {
-                return null;
-              }
-            })
-            .filter(Boolean) as any[];
         }
 
-        const featured = (mongoMovies || []).filter((m) => Boolean(m.featured));
+        // Always scan local disk files and merge with MongoDB to ensure zero data loss during cache/DB sync
+        ensureContentDirExists();
+        const files = getAllCustomMovieFiles();
+        const diskMovies = files
+          .map((file) => {
+            try {
+              const raw = fs.readFileSync(path.join(CONTENT_DIR, file), 'utf8');
+              const { data } = matter(raw);
+              return {
+                slug: file.replace(/\.(md|markdown)$/i, ''),
+                tmdb_id: Number(data.tmdb_id) || 0,
+                title: data.title || file.replace(/\.(md|markdown)$/i, ''),
+                videourl: cleanVideoUrl(data.videourl || data.video_url || '') || '',
+                image_url: data.image_url || data.poster_path || '',
+                deskripsi: data.deskripsi || data.overview || '',
+                rating: Number(data.rating) || 0,
+                featured: Boolean(data.featured),
+                createdAt: 0,
+                updatedAt: 0,
+              };
+            } catch {
+              return null;
+            }
+          })
+          .filter(Boolean) as any[];
+
+        const moviesMap = new Map<string, any>();
+        for (const dm of diskMovies) {
+          moviesMap.set(dm.slug, dm);
+        }
+        for (const mm of mongoMovies) {
+          moviesMap.set(mm.slug, mm);
+        }
+
+        const allMovies = Array.from(moviesMap.values());
+        const featured = allMovies.filter((m) => Boolean(m.featured));
         return await Promise.all(
           featured.map(async (m) => {
             let overview = (m.deskripsi || (m as any).description || '').trim();

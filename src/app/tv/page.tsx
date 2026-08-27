@@ -63,12 +63,10 @@ export default async function TVPage() {
   return (
     <div className="min-h-screen" style={{ background: '#050816' }}>
       {/* Featured TV Carousel Hero matching desktop fluid layout */}
-      {featuredShow && (
+      {customFeaturedShows.length > 0 && (
         <Hero
-          tvShow={featuredShow}
-          tvShows={trending}
           genres={genreList}
-          customFeaturedItems={customFeaturedShows.length > 0 ? customFeaturedShows : undefined}
+          customFeaturedItems={customFeaturedShows}
           type="tv"
           badgeText="Featured Series"
         />
