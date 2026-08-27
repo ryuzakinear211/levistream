@@ -4,7 +4,7 @@ import path from 'path';
 import matter from 'gray-matter';
 import { slugify, cleanVideoUrl } from '@/lib/urls';
 import { serializeTinaMovie, serializeTinaTVShow, serializeTinaTVEpisode } from '@/lib/tina/schema';
-import { saveGitHubFile, GitHubOptions } from '@/lib/githubStorage';
+import { saveGitHubFile, commitMultipleGitHubFiles, GitHubOptions } from '@/lib/githubStorage';
 import { memoryCache } from '@/lib/cache';
 
 export interface MongoMovie {
@@ -425,19 +425,20 @@ export async function saveMongoMovie(data: Partial<MongoMovie>): Promise<MongoMo
   const slug = data.slug || (data.title ? slugify(data.title) : `movie-${data.tmdb_id}`);
   const now = Date.now();
 
+  const existing = await movies.findOne({ slug });
   const doc: MongoMovie = {
     slug,
-    tmdb_id: Number(data.tmdb_id) || 0,
-    title: data.title || slug,
-    videourl: cleanVideoUrl(data.videourl || '') || '',
-    image_url: data.image_url || '',
-    deskripsi: data.deskripsi || '',
-    rating: Number(data.rating) || 0,
-    featured: Boolean(data.featured),
-    subtitles: data.subtitles || '',
-    duration: data.duration || '',
-    content: data.content || '',
-    createdAt: data.createdAt || now,
+    tmdb_id: data.tmdb_id !== undefined ? Number(data.tmdb_id) : (existing?.tmdb_id || 0),
+    title: (data.title !== undefined ? data.title : (existing?.title || slug)).trim(),
+    videourl: (data.videourl !== undefined ? cleanVideoUrl(data.videourl) : (existing?.videourl || '')).trim(),
+    image_url: (data.image_url !== undefined ? data.image_url : (existing?.image_url || '')).trim(),
+    deskripsi: (data.deskripsi !== undefined ? data.deskripsi : (existing?.deskripsi || '')).trim(),
+    rating: data.rating !== undefined && data.rating !== null ? Number(data.rating) : (existing?.rating || 0),
+    featured: data.featured !== undefined ? Boolean(data.featured) : Boolean(existing?.featured),
+    subtitles: (data.subtitles !== undefined ? data.subtitles : (existing?.subtitles || '')).trim(),
+    duration: (data.duration !== undefined ? data.duration : (existing?.duration || '')).trim(),
+    content: data.content !== undefined ? data.content : (existing?.content || ''),
+    createdAt: existing?.createdAt || data.createdAt || now,
     updatedAt: now,
   };
 
@@ -655,16 +656,17 @@ export async function saveMongoTVShow(
   const showSlug = data.showSlug || (data.title ? slugify(data.title) : `tv-${data.tmdb_id}`);
   const now = Date.now();
 
+  const existing = await tvShows.findOne({ showSlug });
   const showDoc: MongoTVShow = {
     showSlug,
-    tmdb_id: Number(data.tmdb_id) || 0,
-    title: data.title || showSlug,
-    image_url: data.image_url || '',
-    deskripsi: data.deskripsi || '',
-    rating: Number(data.rating) || 0,
-    featured: Boolean(data.featured),
-    content: data.content || '',
-    createdAt: data.createdAt || now,
+    tmdb_id: data.tmdb_id !== undefined ? Number(data.tmdb_id) : (existing?.tmdb_id || 0),
+    title: (data.title !== undefined ? data.title : (existing?.title || showSlug)).trim(),
+    image_url: (data.image_url !== undefined ? data.image_url : (existing?.image_url || '')).trim(),
+    deskripsi: (data.deskripsi !== undefined ? data.deskripsi : (existing?.deskripsi || '')).trim(),
+    rating: data.rating !== undefined && data.rating !== null ? Number(data.rating) : (existing?.rating || 0),
+    featured: data.featured !== undefined ? Boolean(data.featured) : Boolean(existing?.featured),
+    content: data.content !== undefined ? data.content : (existing?.content || ''),
+    createdAt: existing?.createdAt || data.createdAt || now,
     updatedAt: now,
   };
 
@@ -672,33 +674,36 @@ export async function saveMongoTVShow(
 
   // Save/Update episodes
   for (const ep of episodesList) {
+    const cleanEp = (ep.episode || ep.slug || 'e1').trim();
+    const seasonFolder = (ep.seasonFolder || 's1').toLowerCase().trim();
+
     if (ep.deleted) {
-      if (ep.episode && ep.seasonFolder) {
+      if (cleanEp && seasonFolder) {
         await episodes.deleteOne({
           showSlug,
-          seasonFolder: ep.seasonFolder,
-          episode: ep.episode,
+          seasonFolder,
+          episode: cleanEp,
         });
       }
       continue;
     }
 
-    const cleanEp = ep.episode || ep.slug || 'e1';
-    const seasonFolder = (ep.seasonFolder || 's1').toLowerCase();
+    const existingEp = await episodes.findOne({ showSlug, seasonFolder, episode: cleanEp });
+
     const epDoc: MongoTVEpisode = {
       showSlug,
       seasonFolder,
       episode: cleanEp,
       slug: cleanEp,
-      title: ep.title || `Episode ${cleanEp.replace(/\D/g, '') || '1'}`,
-      videourl: cleanVideoUrl(ep.videourl || '') || '',
-      image_url: ep.image_url || showDoc.image_url || '',
-      deskripsi: ep.deskripsi || '',
-      rating: Number(ep.rating) || 0,
-      duration: ep.duration || '',
-      subtitles: ep.subtitles || '',
-      content: ep.content || '',
-      createdAt: ep.createdAt || now,
+      title: ep.title !== undefined ? ep.title.trim() : (existingEp?.title || `Episode ${cleanEp.replace(/\D/g, '') || '1'}`),
+      videourl: ep.videourl !== undefined ? cleanVideoUrl(ep.videourl) : (existingEp?.videourl || ''),
+      image_url: ep.image_url !== undefined ? ep.image_url.trim() : (existingEp?.image_url || showDoc.image_url || ''),
+      deskripsi: ep.deskripsi !== undefined ? ep.deskripsi.trim() : (existingEp?.deskripsi || ''),
+      rating: ep.rating !== undefined && ep.rating !== null ? Number(ep.rating) : (existingEp?.rating || 0),
+      duration: ep.duration !== undefined ? ep.duration.trim() : (existingEp?.duration || ''),
+      subtitles: ep.subtitles !== undefined ? ep.subtitles.trim() : (existingEp?.subtitles || ''),
+      content: ep.content !== undefined ? ep.content : (existingEp?.content || ''),
+      createdAt: existingEp?.createdAt || ep.createdAt || now,
       updatedAt: now,
     };
 
@@ -722,7 +727,7 @@ export async function deleteMongoTVShow(showSlug: string): Promise<boolean> {
 }
 
 // ──────────────────────────────────────────
-// SYNC MONGODB TO GITHUB
+// SYNC MONGODB TO GITHUB (ATOMIC BULK COMMIT)
 // ──────────────────────────────────────────
 
 export async function syncMongoDBToGitHub(ghConfig: GitHubOptions) {
@@ -731,68 +736,110 @@ export async function syncMongoDBToGitHub(ghConfig: GitHubOptions) {
     throw new Error('Token GitHub diperlukan untuk melakukan sinkronisasi ke repository.');
   }
 
-  let syncedCount = 0;
+  // 1. Fetch freshest, live un-cached data directly from MongoDB
+  const { movies, tvShows, episodes } = await getCollectionsRaw();
+  const [allMovies, allShows, allEpisodes] = await Promise.all([
+    movies.find({}).sort({ updatedAt: -1 }).toArray(),
+    tvShows.find({}).sort({ updatedAt: -1 }).toArray(),
+    episodes.find({ deleted: { $ne: true } }).toArray(),
+  ]);
 
-  // 1. Sync all movies
-  const movies = await getMongoMovies();
-  for (const m of movies) {
+  const filesMap = new Map<string, string>();
+
+  // 2. Format all movies
+  for (const m of allMovies) {
     const relPath = `video/${m.slug}.md`;
-    const frontmatter = {
+    const frontmatter: Record<string, any> = {
       tmdb_id: m.tmdb_id,
       title: m.title,
       videourl: m.videourl,
-      image_url: m.image_url,
-      deskripsi: m.deskripsi,
-      rating: m.rating,
-      featured: m.featured,
-      subtitles: m.subtitles,
-      duration: m.duration,
     };
+    if (m.image_url) frontmatter.image_url = m.image_url;
+    if (m.deskripsi) frontmatter.deskripsi = m.deskripsi;
+    if (m.rating !== undefined && m.rating !== null) frontmatter.rating = m.rating;
+    if (m.featured) frontmatter.featured = true;
+    if (m.subtitles) frontmatter.subtitles = m.subtitles;
+    if (m.duration) frontmatter.duration = m.duration;
+
     const content = serializeTinaMovie(frontmatter, m.content || '');
-    try {
-      await saveGitHubFile(relPath, content, `cms: sync ${relPath}`, ghConfig);
-      syncedCount++;
-    } catch (e) {
-      console.warn(`[syncMongoDBToGitHub] Error saving ${relPath}:`, e);
-    }
+    filesMap.set(relPath, content);
   }
 
-  // 2. Sync all TV shows and episodes
-  const shows = await getMongoTVShows();
-  for (const s of shows) {
+  // 3. Format all TV shows & episodes
+  for (const s of allShows) {
     const indexPath = `tv/${s.showSlug}/_index.md`;
-    const indexFrontmatter = {
+    const indexFrontmatter: Record<string, any> = {
       tmdb_id: s.tmdb_id,
       title: s.title,
-      image_url: s.image_url,
-      deskripsi: s.deskripsi,
-      rating: s.rating,
-      featured: s.featured,
     };
-    const indexContent = serializeTinaTVShow(indexFrontmatter, s.content || '');
-    try {
-      await saveGitHubFile(indexPath, indexContent, `cms: sync ${indexPath}`, ghConfig);
-      syncedCount++;
-    } catch {}
+    if (s.image_url) indexFrontmatter.image_url = s.image_url;
+    if (s.deskripsi) indexFrontmatter.deskripsi = s.deskripsi;
+    if (s.rating !== undefined && s.rating !== null) indexFrontmatter.rating = s.rating;
+    if (s.featured) indexFrontmatter.featured = true;
 
-    for (const ep of s.episodes || []) {
-      const epPath = `tv/${s.showSlug}/${ep.seasonFolder}/${ep.episode}.md`;
-      const epFrontmatter = {
-        title: ep.title,
-        videourl: ep.videourl,
-        image_url: ep.image_url,
-        deskripsi: ep.deskripsi,
-        rating: ep.rating,
-        duration: ep.duration,
-        subtitles: ep.subtitles,
-      };
-      const epContent = serializeTinaTVEpisode(epFrontmatter, ep.content || '');
-      try {
-        await saveGitHubFile(epPath, epContent, `cms: sync ${epPath}`, ghConfig);
-        syncedCount++;
-      } catch {}
-    }
+    const indexContent = serializeTinaTVShow(indexFrontmatter, s.content || '');
+    filesMap.set(indexPath, indexContent);
   }
 
-  return { success: true, syncedCount };
+  for (const ep of allEpisodes) {
+    const epPath = `tv/${ep.showSlug}/${ep.seasonFolder}/${ep.episode}.md`;
+    const epFrontmatter: Record<string, any> = {
+      title: ep.title,
+      videourl: ep.videourl,
+    };
+    if (ep.image_url) epFrontmatter.image_url = ep.image_url;
+    if (ep.deskripsi) epFrontmatter.deskripsi = ep.deskripsi;
+    if (ep.rating !== undefined && ep.rating !== null) epFrontmatter.rating = ep.rating;
+    if (ep.duration) epFrontmatter.duration = ep.duration;
+    if (ep.subtitles) epFrontmatter.subtitles = ep.subtitles;
+
+    const epContent = serializeTinaTVEpisode(epFrontmatter, ep.content || '');
+    filesMap.set(epPath, epContent);
+  }
+
+  // 4. Merge any local filesystem files if missing or newer (for local development)
+  try {
+    const VIDEO_DIR = path.join(process.cwd(), 'video');
+    const TV_DIR = path.join(process.cwd(), 'tv');
+
+    if (fs.existsSync(VIDEO_DIR)) {
+      const localMovies = fs.readdirSync(VIDEO_DIR).filter((f) => f.endsWith('.md') || f.endsWith('.markdown'));
+      for (const m of localMovies) {
+        const rel = `video/${m}`;
+        if (!filesMap.has(rel)) {
+          const content = fs.readFileSync(path.join(VIDEO_DIR, m), 'utf8');
+          filesMap.set(rel, content);
+        }
+      }
+    }
+
+    if (fs.existsSync(TV_DIR)) {
+      const dirs = fs.readdirSync(TV_DIR, { withFileTypes: true }).filter((d) => d.isDirectory());
+      for (const d of dirs) {
+        const showDir = path.join(TV_DIR, d.name);
+        const indexMd = fs.existsSync(path.join(showDir, '_index.md'))
+          ? path.join(showDir, '_index.md')
+          : fs.existsSync(path.join(showDir, 'index.md'))
+          ? path.join(showDir, 'index.md')
+          : null;
+        if (indexMd && !filesMap.has(`tv/${d.name}/_index.md`)) {
+          filesMap.set(`tv/${d.name}/_index.md`, fs.readFileSync(indexMd, 'utf8'));
+        }
+      }
+    }
+  } catch {}
+
+  const filesArray = Array.from(filesMap.entries()).map(([filePath, content]) => ({
+    path: filePath,
+    content,
+  }));
+
+  // 5. Commit all files in a single atomic Git Tree commit (< 1 second)
+  const res = await commitMultipleGitHubFiles(
+    filesArray,
+    `cms: sync ${filesArray.length} content files from CMS`,
+    ghConfig
+  );
+
+  return { success: true, syncedCount: res.syncedCount };
 }

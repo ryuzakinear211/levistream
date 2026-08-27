@@ -10,6 +10,7 @@ import {
   getGitHubTree,
   getGitHubBlob,
   getGitHubRawFile,
+  commitMultipleGitHubFiles,
   GitHubOptions,
 } from '@/lib/githubStorage';
 import { getMovieDetails, getTVShowDetails, getImageUrl } from '@/lib/tmdb';
@@ -1200,7 +1201,41 @@ export async function updateAdminContent(body: any, ghConfig: GitHubOptions) {
       console.warn('[updateAdminContent] MongoDB TV show update notice:', mErr);
     }
   } else {
+    // Single TV episode update: tv/[showSlug]/[season]/[episode].md
     fileContent = serializeTinaTVEpisode(cleanFrontmatter, content || '');
+    const parts = relativePath.split('/');
+    if (parts.length >= 4) {
+      const showSlug = parts[1];
+      const seasonFolder = (parts[2] || 's1').toLowerCase();
+      const episode = (parts[3] || 'e1.md').replace(/\.(md|markdown)$/i, '');
+
+      try {
+        await saveMongoTVShow(
+          { showSlug },
+          [
+            {
+              showSlug,
+              seasonFolder,
+              episode,
+              slug: episode,
+              title: cleanFrontmatter.title || `Episode ${episode.replace(/\D/g, '') || '1'}`,
+              videourl: cleanVideoUrl(cleanFrontmatter.videourl || cleanFrontmatter.video_url || '') || '',
+              image_url: cleanFrontmatter.image_url || cleanFrontmatter.poster_path || '',
+              deskripsi: cleanFrontmatter.deskripsi || cleanFrontmatter.description || '',
+              rating:
+                cleanFrontmatter.rating !== undefined && cleanFrontmatter.rating !== null
+                  ? Number(cleanFrontmatter.rating)
+                  : 0,
+              duration: cleanFrontmatter.duration || '',
+              subtitles: cleanFrontmatter.subtitles || '',
+              content: content || '',
+            },
+          ]
+        );
+      } catch (mErr) {
+        console.warn('[updateAdminContent] MongoDB single episode update notice:', mErr);
+      }
+    }
   }
 
   // Save main file to local filesystem
@@ -1375,16 +1410,18 @@ export async function syncAllToGitHub(ghConfig: GitHubOptions) {
       }
     }
 
-    for (const file of localFiles) {
-      try {
-        await saveGitHubFile(file.relativePath, file.content, `cms: sync ${file.relativePath}`, ghConfig);
-        syncedCount++;
-      } catch (e) {
-        console.warn(`[syncAllToGitHub] Error saving ${file.relativePath}:`, e);
-      }
-    }
+    const filesArray = localFiles.map((f) => ({
+      path: f.relativePath,
+      content: f.content,
+    }));
+
+    const result = await commitMultipleGitHubFiles(
+      filesArray,
+      `cms: sync ${filesArray.length} content files from local files`,
+      ghConfig
+    );
 
     selectiveRevalidateAll();
-    return { success: true, syncedCount, deletedCount: 0 };
+    return { success: true, syncedCount: result.syncedCount, deletedCount: 0 };
   }
 }
