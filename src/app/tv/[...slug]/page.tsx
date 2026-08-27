@@ -221,7 +221,7 @@ export default async function TVShowPage({ params }: PageProps) {
         thumbnailUrl: [thumbnailImage],
         uploadDate: uploadDate,
         duration: durationIso,
-        contentUrl: videoUrl || pageUrl,
+        contentUrl: pageUrl,
         embedUrl: embedUrl,
         publisher: {
           '@type': 'Organization',
