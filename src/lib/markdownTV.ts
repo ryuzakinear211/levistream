@@ -773,73 +773,39 @@ export function getCustomTVTmdbMapping(): Record<string, string> {
  * Returns all custom markdown TV shows that have `featured: true` in their _index.md.
  */
 export async function getAllFeaturedCustomTV(): Promise<FeaturedItem[]> {
-  const showSlugs = await getAllCustomTVShowDirsAsync();
-  const results = await Promise.all(
-    showSlugs.map(async (slug) => {
-      try {
-        const customData = await getCustomTVShowBySlug(slug);
-        if (
-          customData &&
-          (customData.frontmatter.featured === true ||
-            customData.frontmatter.featured === 'true' ||
-            customData.frontmatter.featured === '1')
-        ) {
-          const detail = await getTVShowDetailsWithCustomOverride([slug]);
-          if (detail) {
-            const firstEp = detail.allEpisodes?.[0];
-            const link = firstEp?.urlPath || getTVUrl(detail);
-            const customImg =
-              detail.customImageUrl ||
-              customData.frontmatter.image_url ||
-              customData.frontmatter.poster_path ||
-              customData.frontmatter.backdrop_url;
-            const backdrop = customImg
-              ? getImageUrl(customImg, 'w1280')
-              : detail.backdrop_path
-              ? getImageUrl(detail.backdrop_path, 'w1280')
-              : detail.poster_path
-              ? getImageUrl(detail.poster_path, 'w780')
-              : '/placeholder-poster.svg';
-            const poster = customImg
-              ? getImageUrl(customImg, 'w500')
-              : detail.poster_path
-              ? getImageUrl(detail.poster_path, 'w500')
-              : detail.backdrop_path
-              ? getImageUrl(detail.backdrop_path, 'w780')
-              : '/placeholder-poster.svg';
+  try {
+    const mongoShows = await getMongoTVShows();
+    return mongoShows
+      .filter((s) => Boolean(s.featured))
+      .map((s) => {
+        const img = s.image_url || '/placeholder-poster.svg';
+        const firstEp = s.episodes?.[0];
+        const epSlug = firstEp ? (firstEp.slug || (firstEp.seasonFolder ? `${firstEp.seasonFolder}/${firstEp.episode}` : firstEp.episode)) : null;
+        const link = epSlug ? `/tv/${s.showSlug}/${epSlug}` : `/tv/${s.showSlug}`;
 
-            return {
-              id: `tv-${detail.customSlug || detail.id}`,
-              tmdbId: detail.id,
-              title: detail.name,
-              tagline: detail.tagline || undefined,
-              overview: detail.overview,
-              backdropUrl: backdrop,
-              posterUrl: poster,
-              rating: Math.round(detail.vote_average * 10) / 10,
-              year: detail.first_air_date ? new Date(detail.first_air_date).getFullYear() : '2025',
-              duration: detail.number_of_episodes
-                ? `${detail.number_of_episodes} Episodes`
-                : detail.episode_run_time?.[0]
-                ? `${detail.episode_run_time[0]}m`
-                : undefined,
-              type: 'tv' as const,
-              genres: detail.genres?.map((g) => g.name) || [],
-              link,
-              badge: 'Featured',
-              featured: true,
-              isCustom: true,
-            } as FeaturedItem;
-          }
-        }
-      } catch (err) {
-        console.error(`Error loading featured custom TV for ${slug}:`, err);
-      }
-      return null;
-    })
-  );
-
-  return results.filter((item): item is FeaturedItem => item !== null);
+        return {
+          id: `tv-${s.showSlug}`,
+          tmdbId: s.tmdb_id || 0,
+          title: s.title || s.showSlug,
+          tagline: undefined,
+          overview: s.deskripsi || '',
+          backdropUrl: img,
+          posterUrl: img,
+          rating: s.rating || 0,
+          year: '2026',
+          duration: s.episodes?.length ? `${s.episodes.length} Episodes` : undefined,
+          type: 'tv' as const,
+          genres: [],
+          link,
+          badge: 'Featured',
+          featured: true,
+          isCustom: true,
+        } as FeaturedItem;
+      });
+  } catch (err) {
+    console.warn('[markdownTV] getAllFeaturedCustomTV error:', err);
+    return [];
+  }
 }
 
 /**
