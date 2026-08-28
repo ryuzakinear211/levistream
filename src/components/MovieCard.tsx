@@ -14,18 +14,23 @@ interface MovieCardProps {
   priority?: boolean;
 }
 
-function isMovie(item: Movie | TVShow): item is Movie {
-  return 'title' in item;
+function getItemMediaType(item: Movie | TVShow, propType?: 'movie' | 'tv'): 'movie' | 'tv' {
+  if ((item as any).media_type === 'tv' || (item as any).isCustomTV) return 'tv';
+  if ((item as any).media_type === 'movie' || (item as any).isCustomMarkdown) return 'movie';
+  if (propType) return propType;
+  if ('first_air_date' in item || ('name' in item && !('release_date' in item))) return 'tv';
+  return 'movie';
 }
 
-export default function MovieCard({ item, type = 'movie', priority = false }: MovieCardProps) {
+export default function MovieCard({ item, type, priority = false }: MovieCardProps) {
   const [imgError, setImgError] = useState(false);
 
-  const title = isMovie(item) ? item.title : item.name;
-  const date = isMovie(item) ? item.release_date : item.first_air_date;
+  const resolvedType = getItemMediaType(item, type);
+  const title = resolvedType === 'tv' ? (item as any).name || (item as any).title : (item as any).title || (item as any).name;
+  const date = resolvedType === 'tv' ? (item as any).first_air_date : (item as any).release_date;
   const year = date ? new Date(date).getFullYear() : null;
   const rating = Math.round((item.vote_average || 0) * 10) / 10;
-  const href = type === 'tv' ? getTVUrl(item) : getMovieUrl(item);
+  const href = resolvedType === 'tv' ? getTVUrl(item) : getMovieUrl(item);
 
   const imagePath = item.poster_path || item.backdrop_path;
   // Use w342 for optimal bandwidth & instant rendering in 2-6 col grids
@@ -54,7 +59,7 @@ export default function MovieCard({ item, type = 'movie', priority = false }: Mo
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-3 bg-gradient-to-br from-[#0f1a2e] to-[#1a2540] text-slate-500">
-            {type === 'tv' ? <Tv size={32} /> : <Film size={32} />}
+            {resolvedType === 'tv' ? <Tv size={32} /> : <Film size={32} />}
             <span className="text-xs text-center line-clamp-2 text-slate-400 font-medium">{title}</span>
           </div>
         )}
@@ -67,7 +72,7 @@ export default function MovieCard({ item, type = 'movie', priority = false }: Mo
 
         {/* ── Media Type Badge (Top-Left: Series / Movie) ── */}
         <div className="absolute top-2 left-2 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/75 backdrop-blur-md border border-white/15 text-slate-200 font-bold text-[9px] sm:text-[10px] uppercase tracking-wider shadow-md">
-          {type === 'tv' ? (
+          {resolvedType === 'tv' ? (
             <>
               <Tv size={10} className="text-cyan-400" />
               <span>Series</span>
