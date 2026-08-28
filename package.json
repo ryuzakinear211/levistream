@@ -8,9 +8,16 @@
     "start": "next start",
     "lint": "next lint",
     "tina:dev": "tinacms dev -c \"next dev\"",
-    "tina:build": "tinacms build"
+    "tina:build": "tinacms build",
+    "dev:vinext": "vinext dev --port 3001",
+    "build:vinext": "vinext build",
+    "start:vinext": "wrangler dev --config dist/server/wrangler.json",
+    "deploy:vinext": "vinext-cloudflare deploy --config dist/server/wrangler.json"
   },
   "dependencies": {
+    "@cloudflare/vite-plugin": "^1.54.1",
+    "@vinext/cloudflare": "^1.0.0-beta.6",
+    "@vitejs/plugin-react": "^6.1.0",
     "autoprefixer": "^10.0.1",
     "gray-matter": "^4.0.3",
     "hls.js": "^1.7.1",
@@ -22,17 +29,23 @@
     "plyr": "^3.8.4",
     "plyr-react": "^6.0.0",
     "postcss": "^8",
-    "react": "^18",
-    "react-dom": "^18",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-server-dom-webpack": "^19.2.8",
     "swiper": "^14.1.0",
     "tailwindcss": "^3.4.1",
     "tinacms": "^2.2.8",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vinext": "^1.0.0-beta.8",
+    "vite": "^8.2.2",
+    "wrangler": "^4.127.0"
   },
   "devDependencies": {
     "@tinacms/cli": "^1.6.4",
     "@types/node": "^20",
     "@types/react": "^18",
-    "@types/react-dom": "^18"
-  }
+    "@types/react-dom": "^18",
+    "@vitejs/plugin-rsc": "^0.5.34"
+  },
+  "type": "module"
 }

@@ -38,12 +38,16 @@ export async function POST(request: NextRequest) {
     const cleanMediaType = mediaType === 'tv' ? 'tv' : 'movie';
     const isTV = cleanMediaType === 'tv';
 
+    const bodyChatId = body.chat_id || body.chatId;
     const botToken =
       process.env.TELEGRAM_BOT_TOKEN ||
       siteConfig.telegram?.botToken ||
       '6673058749:AAH0X2vdpEgWNxeDhsZJy77_pXIG-_YCpRU';
     const chatId =
-      process.env.TELEGRAM_CHAT_ID || siteConfig.telegram?.chatId || '';
+      bodyChatId ||
+      process.env.TELEGRAM_CHAT_ID ||
+      siteConfig.telegram?.chatId ||
+      '';
 
     // Format local Indonesian timestamp (WIB / GMT+7)
     const now = new Date();
@@ -59,7 +63,7 @@ export async function POST(request: NextRequest) {
       ? `<a href="https://www.themoviedb.org/${cleanMediaType}/${tmdbId}">${tmdbId}</a>`
       : '<i>Manual Entry</i>';
 
-    const captionText = [
+    const messageText = [
       `🎬 <b>PERMINTAAN KONTEN BARU (${siteConfig.name})</b>`,
       `━━━━━━━━━━━━━━━━━━━━━━━━`,
       `📌 <b>Judul:</b> <b>${escapeHtml(cleanTitle)}</b> ${year ? `(${escapeHtml(String(year))})` : ''}`,
@@ -82,61 +86,29 @@ export async function POST(request: NextRequest) {
 
     if (botToken && chatId) {
       try {
-        // Try sending with photo if available
-        if (posterUrl && typeof posterUrl === 'string' && posterUrl.startsWith('http')) {
-          const photoRes = await fetch(
-            `https://api.telegram.org/bot${botToken}/sendPhoto`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chat_id: chatId,
-                photo: posterUrl,
-                caption: captionText,
-                parse_mode: 'HTML',
-              }),
-            }
-          );
-          const photoData = await photoRes.json();
-          if (photoData.ok) {
-            telegramSent = true;
-          } else {
-            console.warn('[Telegram sendPhoto failed, falling back to sendMessage]:', photoData);
-            // Fallback to text sendMessage
-            const textRes = await fetch(
-              `https://api.telegram.org/bot${botToken}/sendMessage`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  chat_id: chatId,
-                  text: captionText,
-                  parse_mode: 'HTML',
-                  disable_web_page_preview: false,
-                }),
-              }
-            );
-            const textData = await textRes.json();
-            if (textData.ok) telegramSent = true;
-            else telegramError = textData.description || 'Gagal mengirim pesan telegram.';
+        // Direct HTTP POST to Telegram Bot sendMessage endpoint
+        const response = await fetch(
+          `https://api.telegram.org/bot${botToken}/sendMessage`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              chat_id: String(chatId),
+              text: messageText,
+              parse_mode: 'HTML',
+              disable_web_page_preview: false,
+            }),
           }
+        );
+
+        const data = await response.json();
+        if (data.ok) {
+          telegramSent = true;
         } else {
-          const textRes = await fetch(
-            `https://api.telegram.org/bot${botToken}/sendMessage`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chat_id: chatId,
-                text: captionText,
-                parse_mode: 'HTML',
-                disable_web_page_preview: false,
-              }),
-            }
-          );
-          const textData = await textRes.json();
-          if (textData.ok) telegramSent = true;
-          else telegramError = textData.description || 'Gagal mengirim pesan telegram.';
+          telegramError = data.description || 'Gagal mengirim pesan telegram.';
+          console.warn('[Telegram HTTP API Error]:', data);
         }
       } catch (err: any) {
         console.error('[Telegram API Network Error]:', err);
