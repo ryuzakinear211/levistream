@@ -33,14 +33,39 @@ function sortLocalTVShows(items: TVShow[], sortOption: string): TVShow[] {
   if (sortOption === 'vote_average.desc') {
     return copy.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
   }
-  if (sortOption === 'first_air_date.desc') {
-    return copy.sort((a, b) => new Date(b.first_air_date || 0).getTime() - new Date(a.first_air_date || 0).getTime());
+  if (sortOption === 'first_air_date.desc' || sortOption === 'newest') {
+    return copy.sort((a: any, b: any) => {
+      const timeB = Math.max(
+        Number(b.updatedAt) || 0,
+        Number(b.createdAt) || 0,
+        new Date(b.first_air_date || 0).getTime()
+      );
+      const timeA = Math.max(
+        Number(a.updatedAt) || 0,
+        Number(a.createdAt) || 0,
+        new Date(a.first_air_date || 0).getTime()
+      );
+      return timeB - timeA;
+    });
   }
   if (sortOption === 'first_air_date.asc') {
-    return copy.sort((a, b) => new Date(a.first_air_date || 0).getTime() - new Date(b.first_air_date || 0).getTime());
+    return copy.sort((a: any, b: any) => {
+      const timeA = Math.min(
+        Number(a.createdAt) || Infinity,
+        new Date(a.first_air_date || '2099-01-01').getTime()
+      );
+      const timeB = Math.min(
+        Number(b.createdAt) || Infinity,
+        new Date(b.first_air_date || '2099-01-01').getTime()
+      );
+      return timeA - timeB;
+    });
   }
   if (sortOption === 'popularity.desc') {
-    return copy.sort((a, b) => (b.popularity || 100) - (a.popularity || 100));
+    return copy.sort((a: any, b: any) => {
+      if ((b.weight || 0) !== (a.weight || 0)) return (b.weight || 0) - (a.weight || 0);
+      return (b.popularity || 100) - (a.popularity || 100);
+    });
   }
   return copy;
 }

@@ -36,7 +36,7 @@ export function isMongoConfigured(): boolean {
   if (isEdgeOrWorker()) {
     return false;
   }
-  const currentUri = process.env.MONGODB_URI;
+  const currentUri = process.env.MONGODB_URI || MONGODB_CONFIG.uri;
   return Boolean(currentUri && currentUri.trim().startsWith('mongodb'));
 }
 
@@ -45,7 +45,7 @@ function createNewClient(): { client: MongoClient; promise: Promise<MongoClient>
     throw new Error('MongoDB is not configured or running in unsupported edge environment');
   }
 
-  const currentUri = process.env.MONGODB_URI || '';
+  const currentUri = process.env.MONGODB_URI || MONGODB_CONFIG.uri;
   const newClient = new MongoClient(currentUri, options);
   const promise = newClient.connect().catch((err) => {
     console.warn('[MongoDB] Connection initialization notice:', err.message);

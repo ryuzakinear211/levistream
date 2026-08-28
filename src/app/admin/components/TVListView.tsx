@@ -166,7 +166,7 @@ export const TVListView: React.FC<TVListViewProps> = ({
     return match ? match[1] : slug;
   };
 
-  if (pageLoading && tvShows.length === 0) {
+  if (pageLoading) {
     return (
       <div className="space-y-4">
         {Array.from({ length: 4 }).map((_, i) => (

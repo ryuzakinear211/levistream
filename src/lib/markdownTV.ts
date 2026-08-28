@@ -1105,6 +1105,8 @@ export async function getAllCustomTVShowsForList(): Promise<any[]> {
               trending: Boolean(s.trending),
               language: s.language ? String(s.language).trim().toUpperCase() : 'ID',
               weight: s.weight !== undefined && s.weight !== null ? Number(s.weight) : undefined,
+              updatedAt: s.updatedAt || s.createdAt || Date.now(),
+              createdAt: s.createdAt || s.updatedAt || Date.now(),
               link: `/tv/${s.showSlug}`,
             };
           })

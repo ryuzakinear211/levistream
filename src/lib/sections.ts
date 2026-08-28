@@ -199,29 +199,38 @@ export async function getResolvedSections(page: 'home' | 'movie' | 'tv'): Promis
           }
         }
 
-        // Sort local items: items with weight come first ordered by weight ASC (smaller number = higher priority)
+        // Sort local items: explicit weight first, then newest updated/created timestamp at the very top
         deduplicatedLocal.sort((a, b) => {
-          const wA = a.weight !== undefined && a.weight !== null ? Number(a.weight) : 999999;
-          const wB = b.weight !== undefined && b.weight !== null ? Number(b.weight) : 999999;
-          return wA - wB;
+          const wA = a.weight !== undefined && a.weight !== null && a.weight !== '' ? Number(a.weight) : 999999;
+          const wB = b.weight !== undefined && b.weight !== null && b.weight !== '' ? Number(b.weight) : 999999;
+          if (wA !== wB) return wA - wB;
+
+          const timeB = Math.max(
+            Number(b.updatedAt) || 0,
+            Number(b.createdAt) || 0,
+            new Date(b.release_date || b.first_air_date || 0).getTime()
+          );
+          const timeA = Math.max(
+            Number(a.updatedAt) || 0,
+            Number(a.createdAt) || 0,
+            new Date(a.release_date || a.first_air_date || 0).getTime()
+          );
+          return timeB - timeA;
         });
 
         const selectedLocal = deduplicatedLocal.slice(0, limit);
         let finalItems = [...selectedLocal];
 
-        // 4. TMDB Fallback: only if local count < limit AND fallback is enabled
-        if (finalItems.length < limit && section.fallback?.enabled) {
-          const shortfall = limit - finalItems.length;
+        // 4. TMDB Fallback: ONLY if there are 0 local items for this section AND fallback is enabled
+        if (finalItems.length === 0 && section.fallback?.enabled) {
           const fallbackCandidates = await fetchTMDBFallback(section.fallback);
 
-          // Deduplicate against local items already selected or in pool
-          const existingIds = new Set(
-            pool.map((p) => String(p.id)).concat(finalItems.map((f) => String(f.id)))
-          );
+          // Deduplicate against local items in pool
+          const existingIds = new Set(pool.map((p) => String(p.id)));
 
           const addedFromTMDB: (Movie | TVShow)[] = [];
           for (const cand of fallbackCandidates) {
-            if (addedFromTMDB.length >= shortfall) break;
+            if (addedFromTMDB.length >= limit) break;
             const candId = String(cand.id);
             if (!existingIds.has(candId)) {
               existingIds.add(candId);
@@ -229,7 +238,7 @@ export async function getResolvedSections(page: 'home' | 'movie' | 'tv'): Promis
             }
           }
 
-          finalItems = [...finalItems, ...addedFromTMDB];
+          finalItems = addedFromTMDB;
         }
 
         if (finalItems.length > 0) {

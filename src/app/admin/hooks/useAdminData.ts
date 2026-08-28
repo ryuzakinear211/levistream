@@ -308,6 +308,17 @@ export function useAdminData() {
   const filteredMovies = processedMovies;
   const filteredTvShows = processedTvShows;
 
+  const parseResponseSafe = async (res: Response) => {
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      try {
+        return await res.json();
+      } catch {}
+    }
+    const text = await res.text().catch(() => '');
+    return { error: text || `HTTP ${res.status} ${res.statusText}` };
+  };
+
   // CRUD Handlers
   const handleCreateSubmit = async (payload: any) => {
     showToast('Menyimpan konten baru...');
@@ -317,7 +328,7 @@ export function useAdminData() {
       body: JSON.stringify(payload),
     });
 
-    const result = await res.json();
+    const result = await parseResponseSafe(res);
     if (!res.ok) {
       if (result.requiresToken) setIsSettingsOpen(true);
       throw new Error(result.error || 'Gagal membuat konten');
@@ -325,9 +336,14 @@ export function useAdminData() {
 
     showToast('Konten berhasil dibuat & live!');
     adminClientCache.clear();
+    setPageLoading(true);
     setMoviePage(1);
     setTvPage(1);
-    fetchContent({ silent: true, customMoviePage: 1, customTvPage: 1, force: true });
+    try {
+      await fetchContent({ customMoviePage: 1, customTvPage: 1, force: true });
+    } finally {
+      setPageLoading(false);
+    }
   };
 
   const handleEditSubmit = async (item: any) => {
@@ -343,7 +359,7 @@ export function useAdminData() {
       }),
     });
 
-    const result = await res.json();
+    const result = await parseResponseSafe(res);
     if (!res.ok) {
       if (result.requiresToken) setIsSettingsOpen(true);
       throw new Error(result.error || 'Gagal menyimpan perubahan');
@@ -351,7 +367,12 @@ export function useAdminData() {
 
     showToast('Perubahan berhasil disimpan & live!');
     adminClientCache.clear();
-    fetchContent({ silent: true, force: true });
+    setPageLoading(true);
+    try {
+      await fetchContent({ force: true });
+    } finally {
+      setPageLoading(false);
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -368,7 +389,7 @@ export function useAdminData() {
         body: JSON.stringify(isBatch ? { paths: selectedBatchPaths } : { path }),
       });
 
-      const result = await res.json();
+      const result = await parseResponseSafe(res);
       if (!res.ok) {
         if (result.requiresToken) setIsSettingsOpen(true);
         throw new Error(result.error || 'Gagal menghapus konten');
@@ -377,7 +398,12 @@ export function useAdminData() {
       showToast(isBatch ? `${count} konten berhasil dihapus!` : 'Konten berhasil dihapus!');
       setSelectedBatchPaths([]);
       adminClientCache.clear();
-      fetchContent({ silent: true, force: true });
+      setPageLoading(true);
+      try {
+        await fetchContent({ force: true });
+      } finally {
+        setPageLoading(false);
+      }
     } catch (err: any) {
       showToast(err.message || 'Gagal menghapus', 'error');
     }

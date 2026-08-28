@@ -311,6 +311,9 @@ export async function fetchPaginatedAdminContent(
             }
             diskTV = Array.from(showsMap.values());
           }
+
+          diskMovies.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+          diskTV.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
           return { movies: diskMovies, tvShows: diskTV };
         },
         60_000,
@@ -1070,7 +1073,14 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
 
     fileContent = serializeTinaMovie(frontmatterData, content || '');
 
-    // Write file locally
+    // 1. Update in-memory static registry for immediate reflection
+    if (typeof STATIC_MOVIE_FILES === 'object') {
+      STATIC_MOVIE_FILES[relativePath] = fileContent;
+      STATIC_MOVIE_FILES[relativePath.replace(/\//g, '\\')] = fileContent;
+      STATIC_MOVIE_FILES[relativePath.replace(/\\/g, '/')] = fileContent;
+    }
+
+    // 2. Write file locally if local disk is available
     try {
       const fullPath = path.join(process.cwd(), relativePath);
       const dir = path.dirname(fullPath);
@@ -1080,26 +1090,37 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
       console.warn(`[createAdminContent] Error writing file ${relativePath}:`, err);
     }
 
-    // Persist to MongoDB
-    try {
-      await saveMongoMovie({
-        slug: fileSlug,
-        tmdb_id: tmdbIdNum,
-        title: frontmatterData.title || fileSlug,
-        videourl: frontmatterData.videourl || '',
-        image_url: frontmatterData.image_url || '',
-        deskripsi: frontmatterData.deskripsi || '',
-        rating: frontmatterData.rating || 0,
-        featured: frontmatterData.featured || false,
-        trending: frontmatterData.trending || false,
-        language: frontmatterData.language || 'ID',
-        weight: frontmatterData.weight,
-        subtitles: frontmatterData.subtitles || '',
-        duration: frontmatterData.duration || '',
-        content: content || '',
-      });
-    } catch (mErr) {
-      console.warn('[createAdminContent] MongoDB movie save notice:', mErr);
+    // 3. Persist to MongoDB (Vercel & Local)
+    if (isMongoConfigured()) {
+      try {
+        await saveMongoMovie({
+          slug: fileSlug,
+          tmdb_id: tmdbIdNum,
+          title: frontmatterData.title || fileSlug,
+          videourl: frontmatterData.videourl || '',
+          image_url: frontmatterData.image_url || '',
+          deskripsi: frontmatterData.deskripsi || '',
+          rating: frontmatterData.rating || 0,
+          featured: frontmatterData.featured || false,
+          trending: frontmatterData.trending || false,
+          language: frontmatterData.language || 'ID',
+          weight: frontmatterData.weight,
+          subtitles: frontmatterData.subtitles || '',
+          duration: frontmatterData.duration || '',
+          content: content || '',
+        });
+      } catch (mErr) {
+        console.warn('[createAdminContent] MongoDB movie save notice:', mErr);
+      }
+    }
+
+    // 4. Auto-commit to GitHub repository if token is available
+    if (token) {
+      try {
+        await saveGitHubFile(relativePath, fileContent, `cms: create ${relativePath}`, ghConfig);
+      } catch (ghErr) {
+        console.warn('[createAdminContent] GitHub auto-commit notice:', ghErr);
+      }
     }
   } else if (contentType === 'tv_show') {
     let { tmdb_id, title, desc, poster, rating, featured, showSlug, content = '', seasons = [] } = body;
@@ -1172,6 +1193,13 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
 
     fileContent = serializeTinaTVShow(frontmatterData, content || '');
 
+    // 1. Update in-memory static registry for show index
+    if (typeof STATIC_TV_FILES === 'object') {
+      STATIC_TV_FILES[relativePath] = fileContent;
+      STATIC_TV_FILES[relativePath.replace(/\//g, '\\')] = fileContent;
+      STATIC_TV_FILES[relativePath.replace(/\\/g, '/')] = fileContent;
+    }
+
     // Write TV Show _index.md to local filesystem
     try {
       const fullPath = path.join(process.cwd(), relativePath);
@@ -1180,6 +1208,14 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
       fs.writeFileSync(fullPath, fileContent, 'utf8');
     } catch (err: any) {
       console.warn(`[createAdminContent] Error writing TV show file ${relativePath}:`, err);
+    }
+
+    if (token) {
+      try {
+        await saveGitHubFile(relativePath, fileContent, `cms: create ${relativePath}`, ghConfig);
+      } catch (ghErr) {
+        console.warn('[createAdminContent] GitHub auto-commit TV show notice:', ghErr);
+      }
     }
 
     // Save multi-season batch episodes
@@ -1219,6 +1255,12 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
 
             const epContentStr = serializeTinaTVEpisode(epFrontmatter, ep.content || '');
 
+            if (typeof STATIC_TV_FILES === 'object') {
+              STATIC_TV_FILES[epRelPath] = epContentStr;
+              STATIC_TV_FILES[epRelPath.replace(/\//g, '\\')] = epContentStr;
+              STATIC_TV_FILES[epRelPath.replace(/\\/g, '/')] = epContentStr;
+            }
+
             try {
               const fullEpPath = path.join(process.cwd(), epRelPath);
               const epDir = path.dirname(fullEpPath);
@@ -1226,6 +1268,14 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
               fs.writeFileSync(fullEpPath, epContentStr, 'utf8');
             } catch (err: any) {
               console.warn(`[createAdminContent] Error writing episode file ${epRelPath}:`, err);
+            }
+
+            if (token) {
+              try {
+                await saveGitHubFile(epRelPath, epContentStr, `cms: create episode ${epRelPath}`, ghConfig);
+              } catch (ghErr) {
+                console.warn(`[createAdminContent] GitHub auto-commit episode notice:`, ghErr);
+              }
             }
 
             mongoEpisodesList.push({
@@ -1249,26 +1299,28 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
       }
     }
 
-    // Persist TV Show & Episodes to MongoDB
-    try {
-      await saveMongoTVShow(
-        {
-          showSlug: cleanShowSlug,
-          tmdb_id: tmdbIdNum,
-          title: frontmatterData.title || cleanShowSlug,
-          image_url: frontmatterData.image_url || '',
-          deskripsi: frontmatterData.deskripsi || '',
-          rating: frontmatterData.rating || 0,
-          featured: frontmatterData.featured || false,
-          trending: frontmatterData.trending || false,
-          language: frontmatterData.language || 'ID',
-          weight: frontmatterData.weight,
-          content: content || '',
-        },
-        mongoEpisodesList
-      );
-    } catch (mErr) {
-      console.warn('[createAdminContent] MongoDB TV show save notice:', mErr);
+    // Persist TV Show & Episodes to MongoDB (Vercel & Local)
+    if (isMongoConfigured()) {
+      try {
+        await saveMongoTVShow(
+          {
+            showSlug: cleanShowSlug,
+            tmdb_id: tmdbIdNum,
+            title: frontmatterData.title || cleanShowSlug,
+            image_url: frontmatterData.image_url || '',
+            deskripsi: frontmatterData.deskripsi || '',
+            rating: frontmatterData.rating || 0,
+            featured: frontmatterData.featured || false,
+            trending: frontmatterData.trending || false,
+            language: frontmatterData.language || 'ID',
+            weight: frontmatterData.weight,
+            content: content || '',
+          },
+          mongoEpisodesList
+        );
+      } catch (mErr) {
+        console.warn('[createAdminContent] MongoDB TV show save notice:', mErr);
+      }
     }
 
     selectiveRevalidateAll();
@@ -1360,42 +1412,60 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
 
     fileContent = serializeTinaTVEpisode(frontmatterData, content || '');
 
-    // Persist single episode to MongoDB
+    // 1. In-memory static registry update
+    if (typeof STATIC_TV_FILES === 'object') {
+      STATIC_TV_FILES[relativePath] = fileContent;
+      STATIC_TV_FILES[relativePath.replace(/\//g, '\\')] = fileContent;
+      STATIC_TV_FILES[relativePath.replace(/\\/g, '/')] = fileContent;
+    }
+
+    // 2. Persist single episode to MongoDB (Vercel & Local)
+    if (isMongoConfigured()) {
+      try {
+        await saveMongoTVShow(
+          { showSlug: cleanShowSlug },
+          [
+            {
+              showSlug: cleanShowSlug,
+              seasonFolder: cleanSeason,
+              episode: cleanEp,
+              slug: cleanEp,
+              title: frontmatterData.title || `Episode ${cleanEp.replace(/\D/g, '') || '1'}`,
+              videourl: cleanVideo,
+              image_url: frontmatterData.image_url || '',
+              deskripsi: frontmatterData.deskripsi || '',
+              rating: frontmatterData.rating || 0,
+              duration: frontmatterData.duration || '',
+              subtitles: frontmatterData.subtitles || '',
+              content: content || '',
+            },
+          ]
+        );
+      } catch (mErr) {
+        console.warn('[createAdminContent] MongoDB episode save notice:', mErr);
+      }
+    }
+
+    // 3. Local disk
     try {
-      await saveMongoTVShow(
-        { showSlug: cleanShowSlug },
-        [
-          {
-            showSlug: cleanShowSlug,
-            seasonFolder: cleanSeason,
-            episode: cleanEp,
-            slug: cleanEp,
-            title: frontmatterData.title || `Episode ${cleanEp.replace(/\D/g, '') || '1'}`,
-            videourl: cleanVideo,
-            image_url: frontmatterData.image_url || '',
-            deskripsi: frontmatterData.deskripsi || '',
-            rating: frontmatterData.rating || 0,
-            duration: frontmatterData.duration || '',
-            subtitles: frontmatterData.subtitles || '',
-            content: content || '',
-          },
-        ]
-      );
-    } catch (mErr) {
-      console.warn('[createAdminContent] MongoDB episode save notice:', mErr);
+      const fullPath = path.join(process.cwd(), relativePath);
+      const dir = path.dirname(fullPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(fullPath, fileContent, 'utf8');
+    } catch (err: any) {
+      console.warn(`[createAdminContent] Error writing file ${relativePath}:`, err);
+    }
+
+    // 4. GitHub auto-commit
+    if (token) {
+      try {
+        await saveGitHubFile(relativePath, fileContent, `cms: create ${relativePath}`, ghConfig);
+      } catch (ghErr) {
+        console.warn('[createAdminContent] GitHub auto-commit notice:', ghErr);
+      }
     }
   } else {
     throw new Error('Invalid contentType');
-  }
-
-  // Save main file (movie or single episode) to local filesystem
-  try {
-    const fullPath = path.join(process.cwd(), relativePath);
-    const dir = path.dirname(fullPath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(fullPath, fileContent, 'utf8');
-  } catch (err: any) {
-    console.warn(`[createAdminContent] Error writing file ${relativePath}:`, err);
   }
 
   selectiveRevalidateAll();
@@ -1412,6 +1482,7 @@ export async function createAdminContent(body: any, ghConfig: GitHubOptions) {
  * Update an existing markdown file and sync to MongoDB
  */
 export async function updateAdminContent(body: any, ghConfig: GitHubOptions) {
+  const { token } = ghConfig;
   const { relativePath, frontmatter: newFrontmatter, content = '' } = body;
 
   if (!relativePath) throw new Error('relativePath is required');
@@ -1564,6 +1635,17 @@ export async function updateAdminContent(body: any, ghConfig: GitHubOptions) {
     }
   }
 
+  // Update in-memory static registry
+  if (isMovie && typeof STATIC_MOVIE_FILES === 'object') {
+    STATIC_MOVIE_FILES[relativePath] = fileContent;
+    STATIC_MOVIE_FILES[relativePath.replace(/\//g, '\\')] = fileContent;
+    STATIC_MOVIE_FILES[relativePath.replace(/\\/g, '/')] = fileContent;
+  } else if (isTV && typeof STATIC_TV_FILES === 'object') {
+    STATIC_TV_FILES[relativePath] = fileContent;
+    STATIC_TV_FILES[relativePath.replace(/\//g, '\\')] = fileContent;
+    STATIC_TV_FILES[relativePath.replace(/\\/g, '/')] = fileContent;
+  }
+
   // Save main file to local filesystem
   try {
     const fullPath = path.join(process.cwd(), relativePath);
@@ -1574,17 +1656,35 @@ export async function updateAdminContent(body: any, ghConfig: GitHubOptions) {
     console.warn(`[updateAdminContent] Error writing file ${relativePath}:`, err);
   }
 
+  if (token) {
+    try {
+      await saveGitHubFile(relativePath, fileContent, `cms: update ${relativePath}`, ghConfig);
+    } catch (ghErr) {
+      console.warn('[updateAdminContent] GitHub auto-commit notice:', ghErr);
+    }
+  }
+
   // If this is a TV show and episodes array was supplied, update all episodes locally
   if (Array.isArray(body.episodes) && (relativePath.endsWith('_index.md') || relativePath.endsWith('index.md'))) {
     const showSlug = relativePath.split('/')[1];
 
     for (const ep of body.episodes) {
       if (ep.deleted && ep.relativePath) {
+        if (typeof STATIC_TV_FILES === 'object') {
+          delete STATIC_TV_FILES[ep.relativePath];
+          delete STATIC_TV_FILES[ep.relativePath.replace(/\//g, '\\')];
+          delete STATIC_TV_FILES[ep.relativePath.replace(/\\/g, '/')];
+        }
         try {
           const epPath = path.join(process.cwd(), ep.relativePath);
           if (fs.existsSync(epPath)) fs.unlinkSync(epPath);
         } catch (e) {
           console.warn(`[updateAdminContent] Error deleting episode ${ep.relativePath}:`, e);
+        }
+        if (token) {
+          try {
+            await deleteGitHubFile(ep.relativePath, `cms: delete episode ${ep.relativePath}`, ghConfig);
+          } catch {}
         }
         continue;
       }
@@ -1609,6 +1709,12 @@ export async function updateAdminContent(body: any, ghConfig: GitHubOptions) {
 
       const epFileContent = serializeTinaTVEpisode(epFrontmatter, ep.content || '');
 
+      if (typeof STATIC_TV_FILES === 'object') {
+        STATIC_TV_FILES[epRelativePath] = epFileContent;
+        STATIC_TV_FILES[epRelativePath.replace(/\//g, '\\')] = epFileContent;
+        STATIC_TV_FILES[epRelativePath.replace(/\\/g, '/')] = epFileContent;
+      }
+
       try {
         const fullEpPath = path.join(process.cwd(), epRelativePath);
         const dir = path.dirname(fullEpPath);
@@ -1616,6 +1722,12 @@ export async function updateAdminContent(body: any, ghConfig: GitHubOptions) {
         fs.writeFileSync(fullEpPath, epFileContent, 'utf8');
       } catch (err: any) {
         console.warn(`[updateAdminContent] Error writing episode ${epRelativePath}:`, err);
+      }
+
+      if (token) {
+        try {
+          await saveGitHubFile(epRelativePath, epFileContent, `cms: update episode ${epRelativePath}`, ghConfig);
+        } catch {}
       }
     }
   }
@@ -1628,6 +1740,7 @@ export async function updateAdminContent(body: any, ghConfig: GitHubOptions) {
  * Delete content from MongoDB and local filesystem
  */
 export async function deleteAdminContent(pathsToDelete: string[], ghConfig: GitHubOptions) {
+  const { token } = ghConfig;
   for (const relativePath of pathsToDelete) {
     const isMovie = relativePath.startsWith('video/');
     const isTV = relativePath.startsWith('tv/');
@@ -1644,27 +1757,48 @@ export async function deleteAdminContent(pathsToDelete: string[], ghConfig: GitH
       ? relativePath
       : null;
 
-    // Delete from MongoDB & Disk with exact granular scope
-    try {
-      if (isMovie) {
-        const slug = path.basename(relativePath).replace(/\.(md|markdown)$/i, '');
-        await deleteMongoMovie(slug);
-      } else if (isTvShowIndex || isTvDirectory) {
-        const showSlug = (folderToDelete || relativePath).replace(/^tv\//, '').split('/')[0];
-        await deleteMongoTVShow(showSlug);
-      } else if (isTvEpisode) {
-        // e.g. tv/lanterns/s1/e1.md
-        const cleanRel = relativePath.replace(/^tv\//, '');
-        const parts = cleanRel.split('/');
-        const showSlug = parts[0];
-        const seasonFolder = parts[1] || 's1';
-        const episode = path.basename(parts[2] || parts[parts.length - 1] || '').replace(/\.(md|markdown)$/i, '');
-        if (showSlug && seasonFolder && episode) {
-          await deleteMongoEpisode(showSlug, seasonFolder, episode);
+    // Remove from in-memory static registry
+    if (isMovie && typeof STATIC_MOVIE_FILES === 'object') {
+      delete STATIC_MOVIE_FILES[relativePath];
+      delete STATIC_MOVIE_FILES[relativePath.replace(/\//g, '\\')];
+      delete STATIC_MOVIE_FILES[relativePath.replace(/\\/g, '/')];
+    } else if (isTV && typeof STATIC_TV_FILES === 'object') {
+      if (folderToDelete) {
+        for (const k of Object.keys(STATIC_TV_FILES)) {
+          if (k.startsWith(folderToDelete) || k.startsWith(folderToDelete.replace(/\//g, '\\'))) {
+            delete STATIC_TV_FILES[k];
+          }
         }
+      } else {
+        delete STATIC_TV_FILES[relativePath];
+        delete STATIC_TV_FILES[relativePath.replace(/\//g, '\\')];
+        delete STATIC_TV_FILES[relativePath.replace(/\\/g, '/')];
       }
-    } catch (mErr) {
-      console.warn('[deleteAdminContent] MongoDB delete notice:', mErr);
+    }
+
+    // Delete from MongoDB & Disk with exact granular scope
+    if (isMongoConfigured()) {
+      try {
+        if (isMovie) {
+          const slug = path.basename(relativePath).replace(/\.(md|markdown)$/i, '');
+          await deleteMongoMovie(slug);
+        } else if (isTvShowIndex || isTvDirectory) {
+          const showSlug = (folderToDelete || relativePath).replace(/^tv\//, '').split('/')[0];
+          await deleteMongoTVShow(showSlug);
+        } else if (isTvEpisode) {
+          // e.g. tv/lanterns/s1/e1.md
+          const cleanRel = relativePath.replace(/^tv\//, '');
+          const parts = cleanRel.split('/');
+          const showSlug = parts[0];
+          const seasonFolder = parts[1] || 's1';
+          const episode = path.basename(parts[2] || parts[parts.length - 1] || '').replace(/\.(md|markdown)$/i, '');
+          if (showSlug && seasonFolder && episode) {
+            await deleteMongoEpisode(showSlug, seasonFolder, episode);
+          }
+        }
+      } catch (mErr) {
+        console.warn('[deleteAdminContent] MongoDB delete notice:', mErr);
+      }
     }
 
     try {
@@ -1679,6 +1813,18 @@ export async function deleteAdminContent(pathsToDelete: string[], ghConfig: GitH
       }
     } catch (err: any) {
       console.warn(`[deleteAdminContent] Error removing ${relativePath}:`, err);
+    }
+
+    if (token) {
+      try {
+        if (folderToDelete) {
+          await deleteGitHubFolder(folderToDelete, `cms: delete folder ${folderToDelete}`, ghConfig);
+        } else {
+          await deleteGitHubFile(relativePath, `cms: delete ${relativePath}`, ghConfig);
+        }
+      } catch (ghErr) {
+        console.warn(`[deleteAdminContent] Error deleting on GitHub:`, ghErr);
+      }
     }
   }
 

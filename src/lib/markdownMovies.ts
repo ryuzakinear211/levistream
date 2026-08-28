@@ -777,6 +777,8 @@ export async function getAllCustomMoviesForList(): Promise<any[]> {
               trending: Boolean(m.trending),
               language: m.language ? String(m.language).trim().toUpperCase() : 'ID',
               weight: m.weight !== undefined && m.weight !== null ? Number(m.weight) : undefined,
+              updatedAt: m.updatedAt || m.createdAt || Date.now(),
+              createdAt: m.createdAt || m.updatedAt || Date.now(),
             };
           })
         );

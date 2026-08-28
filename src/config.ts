@@ -116,7 +116,7 @@ export const siteConfig = {
       pages: { home: true, movie: false, tv: false },
       weight: 10,
       limit: 10,
-      filter: { trending: true, language: 'ID' },
+      filter: { trending: true },
       fallback: { enabled: true, tmdbType: 'movie', tmdbEndpoint: 'trending' },
     },
     {
@@ -201,6 +201,7 @@ export const siteConfig = {
       pages: { home: true, movie: false, tv: true },
       weight: 70,
       limit: 10,
+      filter: { trending: true },
       fallback: { enabled: true, tmdbType: 'tv', tmdbEndpoint: 'trending' },
     },
     {

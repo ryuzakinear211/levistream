@@ -127,7 +127,7 @@ export const EditModal: React.FC<EditModalProps> = ({
     if (editingItem.type === 'movie' || editingItem.type === 'tv_episode') {
       const vid = editingItem.frontmatter.videourl || editingItem.frontmatter.video_url;
       if (vid && !isValidVideoUrl(vid)) {
-        const msg = 'Format URL Video tidak valid (contoh: https://domain.com/video.mp4 atau https://embed.provider.com/...)';
+        const msg = 'URL Video harus diawali https://';
         setSubmitError(msg);
         showToast(msg, 'error');
         return;
@@ -135,7 +135,7 @@ export const EditModal: React.FC<EditModalProps> = ({
     } else if (editingItem.type === 'tv_show') {
       for (const ep of episodesList) {
         if (ep.videourl && !isValidVideoUrl(ep.videourl)) {
-          const msg = `URL Video untuk ${ep.title || ep.slug} tidak valid.`;
+          const msg = `URL Video untuk ${ep.title || ep.slug} harus diawali https://`;
           setSubmitError(msg);
           showToast(msg, 'error');
           return;

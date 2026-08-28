@@ -54,43 +54,17 @@ export function generateSafeContentSlug(
 
 /**
  * Validates whether a given string is a valid video stream or embed URL.
- * Rejects plain text, spaces, or invalid formats.
+ * Relaxed validation: verifies that the URL starts with https:// (or http://, //, or local path).
  */
 export function isValidVideoUrl(url?: string | null): boolean {
   if (!url || typeof url !== 'string') return false;
   const clean = cleanVideoUrl(url);
   if (!clean) return false;
+  const trimmed = clean.trim();
+  if (trimmed.length < 5) return false;
 
-  // Must not be plain text with spaces
-  if (/\s/.test(clean)) return false;
-
-  // Protocol relative //domain.com/video.mp4
-  if (clean.startsWith('//') && clean.length > 4 && clean.includes('.')) {
-    return true;
-  }
-
-  // Local / static path e.g. /static/video.mp4 or /videos/sample.mp4
-  if (clean.startsWith('/') && !clean.startsWith('//')) {
-    return clean.length > 2 && /\.(mp4|mkv|webm|m3u8|mpd)$/i.test(clean);
-  }
-
-  // Must start with http:// or https://
-  if (!/^https?:\/\//i.test(clean)) {
-    return false;
-  }
-
-  try {
-    const parsed = new URL(clean);
-    if (!parsed.hostname || (!parsed.hostname.includes('.') && parsed.hostname !== 'localhost')) {
-      return false;
-    }
-    if (parsed.hostname.length < 3) {
-      return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
+  // Simple relaxed check: must start with https://, http://, protocol-relative //, or /
+  return /^https?:\/\//i.test(trimmed) || trimmed.startsWith('//') || trimmed.startsWith('/');
 }
 
 /**
