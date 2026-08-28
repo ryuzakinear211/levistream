@@ -13,6 +13,7 @@ image_url: 'https://image.tmdb.org/t/p/w1280/7O4iVfOMQmdCSxhOg1WnzG1AgYT.jpg'
 rating: 9.9
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 deskripsi: >-
   Di Jepang abad ke-17 pada masa awal perang saudara yang menentukan abad
   tersebut, Lord Yoshii Toranaga berjuang untuk bertahan hidup ketika
@@ -23,6 +24,10 @@ featured: true
 featured: false
 >>>>>>> upstream/main
 =======
+>>>>>>> upstream/main
+=======
+featured: false
+language: JP
 >>>>>>> upstream/main
 ---
 

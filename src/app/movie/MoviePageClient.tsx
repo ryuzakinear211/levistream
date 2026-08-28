@@ -72,10 +72,24 @@ function sortLocalMovies(items: Movie[], sortOption: string): Movie[] {
   return copy;
 }
 
-function filterByLanguage(items: Movie[], lang: 'all' | 'en' | 'id'): Movie[] {
-  if (lang === 'en') return items.filter((m: any) => (m.language || 'ID').toUpperCase() === 'EN');
-  if (lang === 'id') return items.filter((m: any) => (m.language || 'ID').toUpperCase() === 'ID');
-  return items;
+type LanguageFilterType = 'all' | 'id' | 'en' | 'kr' | 'jp' | 'anime';
+
+function filterByLanguage(items: Movie[], lang: string): Movie[] {
+  if (lang === 'all') return items;
+  const target = lang.toUpperCase();
+  if (target === 'ANIME') {
+    return items.filter((m: any) => {
+      const l = (m.language || 'ID').toUpperCase();
+      return l === 'ANIME' || l === 'JP_ANIME' || l === 'JA_ANIME';
+    });
+  }
+  if (target === 'JP') {
+    return items.filter((m: any) => {
+      const l = (m.language || 'ID').toUpperCase();
+      return l === 'JP' || l === 'JA' || l === 'JPN';
+    });
+  }
+  return items.filter((m: any) => (m.language || 'ID').toUpperCase() === target);
 }
 
 export default function MoviePageClient({
@@ -91,7 +105,7 @@ export default function MoviePageClient({
   const searchParams = useSearchParams();
 
   const [genres, setGenres] = useState<Genre[]>(propGenres);
-  const [languageFilter, setLanguageFilter] = useState<'all' | 'en' | 'id'>('all');
+  const [languageFilter, setLanguageFilter] = useState<LanguageFilterType>('all');
   const [page, setPage] = useState(initialPage);
   const [sort, setSort] = useState(initialSort);
   const [genreId, setGenreId] = useState<number | undefined>(initialGenreId);
@@ -132,14 +146,14 @@ export default function MoviePageClient({
     const p = Number(searchParams.get('page')) || 1;
     const s = searchParams.get('sort') || 'popularity.desc';
     const g = searchParams.get('genre') ? Number(searchParams.get('genre')) : undefined;
-    const l = (searchParams.get('lang') as 'all' | 'en' | 'id') || 'all';
+    const rawL = (searchParams.get('lang') || 'all').toLowerCase();
+    const validLangs: LanguageFilterType[] = ['all', 'id', 'en', 'kr', 'jp', 'anime'];
+    const l: LanguageFilterType = validLangs.includes(rawL as any) ? (rawL as LanguageFilterType) : 'all';
 
     setPage(p);
     setSort(s);
     setGenreId(g);
-    if (l === 'en' || l === 'id' || l === 'all') {
-      setLanguageFilter(l);
-    }
+    setLanguageFilter(l);
   }, [searchParams]);
 
   // Fetch or filter movies when filter/sort/page/language change
@@ -196,7 +210,7 @@ export default function MoviePageClient({
     }
   };
 
-  const handleLanguageChange = (newLang: 'all' | 'en' | 'id') => {
+  const handleLanguageChange = (newLang: LanguageFilterType) => {
     setLanguageFilter(newLang);
     setPage(1);
     updateUrl(1, sort, genreId, newLang);
@@ -285,7 +299,7 @@ export default function MoviePageClient({
                 </div>
                 <button
                   onClick={() => handleLanguageChange('all')}
-                  className={`px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
                     languageFilter === 'all'
                       ? 'bg-cyan-500 text-black shadow-md shadow-cyan-500/30'
                       : 'text-slate-400 hover:text-white'
@@ -295,8 +309,19 @@ export default function MoviePageClient({
                   All
                 </button>
                 <button
+                  onClick={() => handleLanguageChange('id')}
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
+                    languageFilter === 'id'
+                      ? 'bg-cyan-500 text-black shadow-md shadow-cyan-500/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Bahasa Indonesia"
+                >
+                  ID
+                </button>
+                <button
                   onClick={() => handleLanguageChange('en')}
-                  className={`px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
                     languageFilter === 'en'
                       ? 'bg-cyan-500 text-black shadow-md shadow-cyan-500/30'
                       : 'text-slate-400 hover:text-white'
@@ -306,15 +331,37 @@ export default function MoviePageClient({
                   EN
                 </button>
                 <button
-                  onClick={() => handleLanguageChange('id')}
-                  className={`px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
-                    languageFilter === 'id'
+                  onClick={() => handleLanguageChange('kr')}
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
+                    languageFilter === 'kr'
                       ? 'bg-cyan-500 text-black shadow-md shadow-cyan-500/30'
                       : 'text-slate-400 hover:text-white'
                   }`}
-                  title="Bahasa Indonesia"
+                  title="Korea"
                 >
-                  ID
+                  KR
+                </button>
+                <button
+                  onClick={() => handleLanguageChange('jp')}
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
+                    languageFilter === 'jp'
+                      ? 'bg-cyan-500 text-black shadow-md shadow-cyan-500/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Jepang (Live Action)"
+                >
+                  JP
+                </button>
+                <button
+                  onClick={() => handleLanguageChange('anime')}
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
+                    languageFilter === 'anime'
+                      ? 'bg-cyan-500 text-black shadow-md shadow-cyan-500/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Jepang (Anime)"
+                >
+                  Anime
                 </button>
               </div>
 

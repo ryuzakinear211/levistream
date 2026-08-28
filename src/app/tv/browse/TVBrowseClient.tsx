@@ -71,10 +71,24 @@ function sortLocalTVShows(items: TVShow[], sortOption: string): TVShow[] {
   return copy;
 }
 
-function filterByLanguage(items: TVShow[], lang: 'all' | 'en' | 'id'): TVShow[] {
-  if (lang === 'en') return items.filter((s: any) => (s.language || 'ID').toUpperCase() === 'EN');
-  if (lang === 'id') return items.filter((s: any) => (s.language || 'ID').toUpperCase() === 'ID');
-  return items;
+type LanguageFilterType = 'all' | 'id' | 'en' | 'kr' | 'jp' | 'anime';
+
+function filterByLanguage(items: TVShow[], lang: string): TVShow[] {
+  if (lang === 'all') return items;
+  const target = lang.toUpperCase();
+  if (target === 'ANIME') {
+    return items.filter((s: any) => {
+      const l = (s.language || 'ID').toUpperCase();
+      return l === 'ANIME' || l === 'JP_ANIME' || l === 'JA_ANIME';
+    });
+  }
+  if (target === 'JP') {
+    return items.filter((s: any) => {
+      const l = (s.language || 'ID').toUpperCase();
+      return l === 'JP' || l === 'JA' || l === 'JPN';
+    });
+  }
+  return items.filter((s: any) => (s.language || 'ID').toUpperCase() === target);
 }
 
 export default function TVBrowseClient({
@@ -90,7 +104,7 @@ export default function TVBrowseClient({
   const searchParams = useSearchParams();
 
   const [genres, setGenres] = useState<Genre[]>(propGenres);
-  const [languageFilter, setLanguageFilter] = useState<'all' | 'en' | 'id'>('all');
+  const [languageFilter, setLanguageFilter] = useState<LanguageFilterType>('all');
   const [page, setPage] = useState(initialPage);
   const [sort, setSort] = useState(initialSort);
   const [genreId, setGenreId] = useState<number | undefined>(initialGenreId);
@@ -132,14 +146,14 @@ export default function TVBrowseClient({
     const p = Number(searchParams.get('page')) || 1;
     const s = searchParams.get('sort') || 'popularity.desc';
     const g = searchParams.get('genre') ? Number(searchParams.get('genre')) : undefined;
-    const l = (searchParams.get('lang') as 'all' | 'en' | 'id') || 'all';
+    const rawL = (searchParams.get('lang') || 'all').toLowerCase();
+    const validLangs: LanguageFilterType[] = ['all', 'id', 'en', 'kr', 'jp', 'anime'];
+    const l: LanguageFilterType = validLangs.includes(rawL as any) ? (rawL as LanguageFilterType) : 'all';
 
     setPage(p);
     setSort(s);
     setGenreId(g);
-    if (l === 'en' || l === 'id' || l === 'all') {
-      setLanguageFilter(l);
-    }
+    setLanguageFilter(l);
   }, [searchParams]);
 
   // Fetch or filter TV shows when filter/sort/page/language change
@@ -196,7 +210,7 @@ export default function TVBrowseClient({
     }
   };
 
-  const handleLanguageChange = (newLang: 'all' | 'en' | 'id') => {
+  const handleLanguageChange = (newLang: LanguageFilterType) => {
     setLanguageFilter(newLang);
     setPage(1);
     updateUrl(1, sort, genreId, newLang);
@@ -261,7 +275,7 @@ export default function TVBrowseClient({
               <h1 className="text-xl sm:text-3xl md:text-4xl font-black truncate sm:whitespace-normal mb-1">
                 <span
                   style={{
-                    background: 'linear-gradient(135deg, #ec4899 0%, #a78bfa 50%, #06b6d4 100%)',
+                    background: 'linear-gradient(135deg, #ec4899, #8b5cf6)',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text',
@@ -277,7 +291,7 @@ export default function TVBrowseClient({
 
             {/* Right: Language Filter & Sort Controls */}
             <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
-              {/* Language Filter Pills: All (default, left), EN, ID */}
+              {/* Language Filter Pills */}
               <div className="flex items-center p-1 rounded-xl bg-white/[0.06] border border-white/10 text-xs font-bold shadow-sm">
                 <div className="flex items-center gap-1 px-2 text-slate-400 hidden xs:flex">
                   <Globe size={13} />
@@ -285,7 +299,7 @@ export default function TVBrowseClient({
                 </div>
                 <button
                   onClick={() => handleLanguageChange('all')}
-                  className={`px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
                     languageFilter === 'all'
                       ? 'bg-pink-500 text-white shadow-md shadow-pink-500/30'
                       : 'text-slate-400 hover:text-white'
@@ -295,8 +309,19 @@ export default function TVBrowseClient({
                   All
                 </button>
                 <button
+                  onClick={() => handleLanguageChange('id')}
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
+                    languageFilter === 'id'
+                      ? 'bg-pink-500 text-white shadow-md shadow-pink-500/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Bahasa Indonesia"
+                >
+                  ID
+                </button>
+                <button
                   onClick={() => handleLanguageChange('en')}
-                  className={`px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
                     languageFilter === 'en'
                       ? 'bg-pink-500 text-white shadow-md shadow-pink-500/30'
                       : 'text-slate-400 hover:text-white'
@@ -306,15 +331,37 @@ export default function TVBrowseClient({
                   EN
                 </button>
                 <button
-                  onClick={() => handleLanguageChange('id')}
-                  className={`px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
-                    languageFilter === 'id'
+                  onClick={() => handleLanguageChange('kr')}
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
+                    languageFilter === 'kr'
                       ? 'bg-pink-500 text-white shadow-md shadow-pink-500/30'
                       : 'text-slate-400 hover:text-white'
                   }`}
-                  title="Bahasa Indonesia"
+                  title="Korea (Drakor)"
                 >
-                  ID
+                  KR
+                </button>
+                <button
+                  onClick={() => handleLanguageChange('jp')}
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
+                    languageFilter === 'jp'
+                      ? 'bg-pink-500 text-white shadow-md shadow-pink-500/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Jepang (Live Action)"
+                >
+                  JP
+                </button>
+                <button
+                  onClick={() => handleLanguageChange('anime')}
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
+                    languageFilter === 'anime'
+                      ? 'bg-pink-500 text-white shadow-md shadow-pink-500/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Jepang (Anime)"
+                >
+                  Anime
                 </button>
               </div>
 

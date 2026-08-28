@@ -759,7 +759,8 @@ export const CreateModal: React.FC<CreateModalProps> = ({
                 <option value="ID">ID - Indonesia</option>
                 <option value="KR">KR - Korea (Drakor)</option>
                 <option value="EN">EN - English (Barat)</option>
-                <option value="JP">JP - Jepang (Anime)</option>
+                <option value="JP">JP - Jepang (Live Action / Biasa)</option>
+                <option value="ANIME">ANIME - Jepang (Anime)</option>
                 <option value="TH">TH - Thailand</option>
                 <option value="CN">CN - China / Mandarin</option>
               </select>

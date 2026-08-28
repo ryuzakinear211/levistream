@@ -250,7 +250,8 @@ export const AdminNavbar: React.FC<AdminNavbarProps> = ({
               <option value="ID" className="bg-[#090e1f] text-white">ID - Indonesia</option>
               <option value="KR" className="bg-[#090e1f] text-white">KR - Korea</option>
               <option value="EN" className="bg-[#090e1f] text-white">EN - English</option>
-              <option value="JP" className="bg-[#090e1f] text-white">JP - Jepang</option>
+              <option value="JP" className="bg-[#090e1f] text-white">JP - Jepang (Live Action)</option>
+              <option value="ANIME" className="bg-[#090e1f] text-white">ANIME - Jepang (Anime)</option>
               <option value="TH" className="bg-[#090e1f] text-white">TH - Thailand</option>
               <option value="CN" className="bg-[#090e1f] text-white">CN - China</option>
             </select>

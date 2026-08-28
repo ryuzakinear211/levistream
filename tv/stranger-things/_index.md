@@ -8,5 +8,6 @@ deskripsi: >-
   pulang.
 rating: 9.6
 featured: true
+language: EN
 ---
 

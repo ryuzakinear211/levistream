@@ -35,7 +35,10 @@ function normalizeLangCode(code?: string): string {
   if (clean === 'ID' || clean === 'IND' || clean === 'INDONESIA') return 'ID';
   if (clean === 'KR' || clean === 'KO' || clean === 'KOR' || clean === 'KOREA') return 'KR';
   if (clean === 'EN' || clean === 'ENG' || clean === 'US' || clean === 'GB') return 'EN';
+  if (clean === 'ANIME' || clean === 'JP_ANIME' || clean === 'JA_ANIME' || clean === 'JAPAN_ANIME') return 'ANIME';
   if (clean === 'JP' || clean === 'JA' || clean === 'JPN' || clean === 'JAPAN') return 'JP';
+  if (clean === 'TH' || clean === 'THA' || clean === 'THAILAND') return 'TH';
+  if (clean === 'CN' || clean === 'ZH' || clean === 'CHI' || clean === 'CHINA' || clean === 'MANDARIN') return 'CN';
   return clean;
 }
 
@@ -235,7 +238,8 @@ export async function getResolvedSections(page: 'home' | 'movie' | 'tv'): Promis
         const selectedLocal = deduplicatedLocal.slice(0, limit);
         let finalItems = [...selectedLocal];
 
-        // 4. TMDB Fallback: ONLY if there are 0 local items for this section AND fallback is enabled
+        // 4. TMDB Fallback: (Disimpan sebagai komentar sesuai permintaan; aktifkan kembali jika sewaktu-waktu dibutuhkan)
+        /*
         if (finalItems.length === 0 && section.fallback?.enabled) {
           const fallbackCandidates = await fetchTMDBFallback(section.fallback);
 
@@ -254,7 +258,9 @@ export async function getResolvedSections(page: 'home' | 'movie' | 'tv'): Promis
 
           finalItems = addedFromTMDB;
         }
+        */
 
+        // Hanya tampilkan section yang memiliki konten (jika 0 konten, section otomatis disembunyikan)
         if (finalItems.length > 0) {
           const displayType: 'movie' | 'tv' =
             section.type === 'tv'
