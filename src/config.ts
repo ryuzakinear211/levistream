@@ -283,6 +283,12 @@ export const siteConfig = {
       },
     },
   },
+
+  // Telegram Bot Notification Config
+  telegram: {
+    botToken: '6673058749:AAH0X2vdpEgWNxeDhsZJy77_pXIG-_YCpRU',
+    chatId: process.env.TELEGRAM_CHAT_ID || '', // Target Telegram Chat ID / Channel ID / Group ID
+  },
 };
 
 export type SiteConfig = typeof siteConfig;

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Film, Search, Menu, X, ChevronDown, Tv } from 'lucide-react';
+import { Film, Search, Menu, X, ChevronDown, Tv, MessageSquarePlus } from 'lucide-react';
 import SearchBar from './SearchBar';
 import { Genre } from '@/types/tmdb';
 import siteConfig from '@/config';
@@ -112,6 +112,17 @@ export default function Navbar({ genres = [] }: NavbarProps) {
               >
                 <Tv size={14} />
                 TV Shows
+              </Link>
+              <Link
+                href="/request"
+                className="px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-1.5"
+                style={{
+                  color: isActive('/request') ? '#06b6d4' : '#94a3b8',
+                  background: isActive('/request') ? 'rgba(6,182,212,0.1)' : 'transparent',
+                }}
+              >
+                <MessageSquarePlus size={14} />
+                Request
               </Link>
 
               {/* Genre Dropdown */}
@@ -251,6 +262,17 @@ export default function Navbar({ genres = [] }: NavbarProps) {
               >
                 <Tv size={16} />
                 TV Shows
+              </Link>
+              <Link
+                href="/request"
+                className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200"
+                style={{
+                  color: isActive('/request') ? '#06b6d4' : '#94a3b8',
+                  background: isActive('/request') ? 'rgba(6,182,212,0.1)' : 'transparent',
+                }}
+              >
+                <MessageSquarePlus size={16} />
+                Request Film / Series
               </Link>
 
               {genres.length > 0 && (

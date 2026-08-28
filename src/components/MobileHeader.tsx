@@ -304,8 +304,9 @@ export default function MobileHeader({ genres = [] }: MobileHeaderProps) {
           {/* Section 3: Action Buttons (Request Film & Donasi) */}
           <div className="pt-3 mt-3 border-t border-white/[0.08] flex items-center justify-between gap-2.5">
             {/* Request Film Button */}
-            <button
-              type="button"
+            <Link
+              href="/request"
+              onClick={() => setMenuOpen(false)}
               className="flex-1 py-2.5 px-3.5 rounded-xl text-xs font-bold text-slate-200 hover:text-cyan-300 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
               style={{
                 background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(124, 58, 237, 0.15))',
@@ -315,7 +316,7 @@ export default function MobileHeader({ genres = [] }: MobileHeaderProps) {
             >
               <MessageSquarePlus size={14} className="text-cyan-400" />
               <span>Request</span>
-            </button>
+            </Link>
 
             {/* Donasi Button */}
             <button
