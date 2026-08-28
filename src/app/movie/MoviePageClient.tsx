@@ -32,40 +32,41 @@ const SORT_OPTIONS = [
 function sortLocalMovies(items: Movie[], sortOption: string): Movie[] {
   const copy = [...items];
   if (sortOption === 'vote_average.desc') {
-    return copy.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
+    return copy.sort((a, b) => {
+      const diff = (b.vote_average || 0) - (a.vote_average || 0);
+      if (diff !== 0) return diff;
+      return (a.title || '').localeCompare(b.title || '');
+    });
   }
   if (sortOption === 'release_date.desc' || sortOption === 'newest') {
     return copy.sort((a: any, b: any) => {
-      const timeB = Math.max(
-        Number(b.updatedAt) || 0,
-        Number(b.createdAt) || 0,
-        new Date(b.release_date || 0).getTime()
-      );
-      const timeA = Math.max(
-        Number(a.updatedAt) || 0,
-        Number(a.createdAt) || 0,
-        new Date(a.release_date || 0).getTime()
-      );
-      return timeB - timeA;
+      const timeB = Number(b.updatedAt) || Number(b.createdAt) || 0;
+      const timeA = Number(a.updatedAt) || Number(a.createdAt) || 0;
+      if (timeB > 0 && timeA > 0 && timeB !== timeA) return timeB - timeA;
+      if (timeB > 0 && timeA === 0) return -1;
+      if (timeA > 0 && timeB === 0) return 1;
+
+      const relB = new Date(b.release_date || 0).getTime();
+      const relA = new Date(a.release_date || 0).getTime();
+      if (relB !== relA) return relB - relA;
+
+      return (a.title || a.slug || '').localeCompare(b.title || b.slug || '');
     });
   }
   if (sortOption === 'release_date.asc') {
     return copy.sort((a: any, b: any) => {
-      const timeA = Math.min(
-        Number(a.createdAt) || Infinity,
-        new Date(a.release_date || '2099-01-01').getTime()
-      );
-      const timeB = Math.min(
-        Number(b.createdAt) || Infinity,
-        new Date(b.release_date || '2099-01-01').getTime()
-      );
-      return timeA - timeB;
+      const relA = new Date(a.release_date || '2099-01-01').getTime();
+      const relB = new Date(b.release_date || '2099-01-01').getTime();
+      if (relA !== relB) return relA - relB;
+      return (a.title || a.slug || '').localeCompare(b.title || b.slug || '');
     });
   }
   if (sortOption === 'popularity.desc') {
     return copy.sort((a: any, b: any) => {
       if ((b.weight || 0) !== (a.weight || 0)) return (b.weight || 0) - (a.weight || 0);
-      return (b.popularity || 100) - (a.popularity || 100);
+      const diff = (b.popularity || 100) - (a.popularity || 100);
+      if (diff !== 0) return diff;
+      return (a.title || '').localeCompare(b.title || '');
     });
   }
   return copy;

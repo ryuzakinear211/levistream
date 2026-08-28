@@ -199,23 +199,37 @@ export async function getResolvedSections(page: 'home' | 'movie' | 'tv'): Promis
           }
         }
 
-        // Sort local items: explicit weight first, then newest updated/created timestamp at the very top
+        // Sort local items with deterministic, multi-level ordering:
         deduplicatedLocal.sort((a, b) => {
-          const wA = a.weight !== undefined && a.weight !== null && a.weight !== '' ? Number(a.weight) : 999999;
-          const wB = b.weight !== undefined && b.weight !== null && b.weight !== '' ? Number(b.weight) : 999999;
-          if (wA !== wB) return wA - wB;
+          // 1. Explicit priority weight (smaller number = higher priority)
+          const hasWA = a.weight !== undefined && a.weight !== null && a.weight !== '';
+          const hasWB = b.weight !== undefined && b.weight !== null && b.weight !== '';
+          if (hasWA || hasWB) {
+            const wA = hasWA ? Number(a.weight) : 999999;
+            const wB = hasWB ? Number(b.weight) : 999999;
+            if (wA !== wB) return wA - wB;
+          }
 
-          const timeB = Math.max(
-            Number(b.updatedAt) || 0,
-            Number(b.createdAt) || 0,
-            new Date(b.release_date || b.first_air_date || 0).getTime()
-          );
-          const timeA = Math.max(
-            Number(a.updatedAt) || 0,
-            Number(a.createdAt) || 0,
-            new Date(a.release_date || a.first_air_date || 0).getTime()
-          );
-          return timeB - timeA;
+          // 2. Updated / Created timestamp (newest updated/created content first)
+          const timeB = Number(b.updatedAt) || Number(b.createdAt) || 0;
+          const timeA = Number(a.updatedAt) || Number(a.createdAt) || 0;
+          if (timeB > 0 && timeA > 0 && timeB !== timeA) {
+            return timeB - timeA;
+          }
+          if (timeB > 0 && timeA === 0) return -1;
+          if (timeA > 0 && timeB === 0) return 1;
+
+          // 3. Release Date / Air Date (newest release first)
+          const relB = new Date(b.release_date || b.first_air_date || 0).getTime();
+          const relA = new Date(a.release_date || a.first_air_date || 0).getTime();
+          if (relB !== relA) {
+            return relB - relA;
+          }
+
+          // 4. Stable deterministic tie-breaker: Title / Slug alphabetical
+          const titleA = String(a.title || a.name || a.slug || '');
+          const titleB = String(b.title || b.name || b.slug || '');
+          return titleA.localeCompare(titleB);
         });
 
         const selectedLocal = deduplicatedLocal.slice(0, limit);

@@ -705,7 +705,13 @@ export async function getAllCustomMoviesForList(): Promise<any[]> {
           const slug = file.replace(/\.(md|markdown)$/i, '');
           if (!mergedMoviesMap.has(slug)) {
             try {
-              const raw = fs.readFileSync(path.join(CONTENT_DIR, file), 'utf8');
+              const fullPath = path.join(CONTENT_DIR, file);
+              const raw = fs.readFileSync(fullPath, 'utf8');
+              let fileTime = 0;
+              try {
+                const stat = fs.statSync(fullPath);
+                fileTime = stat.mtimeMs || stat.birthtimeMs || 0;
+              } catch {}
               const { data } = matter(raw);
               mergedMoviesMap.set(slug, {
                 slug,
@@ -719,8 +725,8 @@ export async function getAllCustomMoviesForList(): Promise<any[]> {
                 trending: Boolean(data.trending),
                 language: data.language ? String(data.language).trim().toUpperCase() : 'ID',
                 weight: data.weight !== undefined && data.weight !== null && data.weight !== '' ? Number(data.weight) : undefined,
-                createdAt: 0,
-                updatedAt: 0,
+                createdAt: fileTime,
+                updatedAt: fileTime,
               });
             } catch {}
           }
@@ -777,8 +783,8 @@ export async function getAllCustomMoviesForList(): Promise<any[]> {
               trending: Boolean(m.trending),
               language: m.language ? String(m.language).trim().toUpperCase() : 'ID',
               weight: m.weight !== undefined && m.weight !== null ? Number(m.weight) : undefined,
-              updatedAt: m.updatedAt || m.createdAt || Date.now(),
-              createdAt: m.createdAt || m.updatedAt || Date.now(),
+              updatedAt: m.updatedAt || m.createdAt || 0,
+              createdAt: m.createdAt || m.updatedAt || 0,
             };
           })
         );

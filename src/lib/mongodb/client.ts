@@ -3,16 +3,16 @@ import { MONGODB_CONFIG } from './config';
 
 const uri = MONGODB_CONFIG.uri;
 
-// Serverless-optimized options for Vercel and AWS Lambda
+// Serverless-optimized options for Vercel, Netlify, and AWS Lambda
 const options: MongoClientOptions = {
-  maxPoolSize: 5,
+  maxPoolSize: 10,
   minPoolSize: 0,
-  maxIdleTimeMS: 3000,
-  serverSelectionTimeoutMS: 2000,
-  connectTimeoutMS: 2000,
-  socketTimeoutMS: 5000,
-  retryReads: false,
-  retryWrites: false,
+  maxIdleTimeMS: 60000,
+  serverSelectionTimeoutMS: 8000,
+  connectTimeoutMS: 8000,
+  socketTimeoutMS: 15000,
+  retryReads: true,
+  retryWrites: true,
   tls: true,
 };
 
@@ -24,11 +24,14 @@ declare global {
 }
 
 function isEdgeOrWorker(): boolean {
+  // Standard Node.js serverless platforms (Netlify, Vercel, AWS Lambda) fully support MongoDB TCP sockets
+  if (process.env.NETLIFY || process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return false;
+  }
+  // Cloudflare Workers (workerd engine) and Edge isolates do not support raw Node.js TCP sockets
   return (
-    typeof (globalThis as any).WebSocketPair !== 'undefined' ||
     process.env.NEXT_RUNTIME === 'edge' ||
-    typeof (process.versions as any)?.workerd !== 'undefined' ||
-    process.env.OPEN_NEXT === 'true'
+    typeof (process.versions as any)?.workerd !== 'undefined'
   );
 }
 

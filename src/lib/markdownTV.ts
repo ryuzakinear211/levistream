@@ -1035,6 +1035,11 @@ export async function getAllCustomTVShowsForList(): Promise<any[]> {
                 : null;
               if (indexPath) {
                 const raw = fs.readFileSync(indexPath, 'utf8');
+                let fileTime = 0;
+                try {
+                  const stat = fs.statSync(indexPath);
+                  fileTime = stat.mtimeMs || stat.birthtimeMs || 0;
+                } catch {}
                 const { data } = matter(raw);
                 mergedShowsMap.set(showDir, {
                   showSlug: showDir,
@@ -1048,8 +1053,8 @@ export async function getAllCustomTVShowsForList(): Promise<any[]> {
                   language: data.language ? String(data.language).trim().toUpperCase() : 'ID',
                   weight: data.weight !== undefined && data.weight !== null && data.weight !== '' ? Number(data.weight) : undefined,
                   episodes: [],
-                  createdAt: 0,
-                  updatedAt: 0,
+                  createdAt: fileTime,
+                  updatedAt: fileTime,
                 });
               }
             } catch {}
@@ -1105,8 +1110,8 @@ export async function getAllCustomTVShowsForList(): Promise<any[]> {
               trending: Boolean(s.trending),
               language: s.language ? String(s.language).trim().toUpperCase() : 'ID',
               weight: s.weight !== undefined && s.weight !== null ? Number(s.weight) : undefined,
-              updatedAt: s.updatedAt || s.createdAt || Date.now(),
-              createdAt: s.createdAt || s.updatedAt || Date.now(),
+              updatedAt: s.updatedAt || s.createdAt || 0,
+              createdAt: s.createdAt || s.updatedAt || 0,
               link: `/tv/${s.showSlug}`,
             };
           })
