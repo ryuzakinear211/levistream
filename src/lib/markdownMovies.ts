@@ -46,34 +46,65 @@ export interface MergedMovieDetail extends MovieDetail {
   customContentHtml?: string | null;
 }
 
+import { STATIC_MOVIE_FILES } from '@/lib/staticContentRegistry';
+
 const CONTENT_DIR = path.join(process.cwd(), 'video');
 
 /**
  * Ensures the video/ content directory exists.
  */
 function ensureContentDirExists(): void {
-  if (!fs.existsSync(CONTENT_DIR)) {
-    fs.mkdirSync(CONTENT_DIR, { recursive: true });
-  }
+  try {
+    if (fs && typeof fs.existsSync === 'function' && !fs.existsSync(CONTENT_DIR)) {
+      fs.mkdirSync(CONTENT_DIR, { recursive: true });
+    }
+  } catch {}
+}
+
+export function getRawMovieFileContent(file: string): string | null {
+  try {
+    const filePath = path.join(CONTENT_DIR, file);
+    if (fs.existsSync(filePath)) {
+      return fs.readFileSync(filePath, 'utf8');
+    }
+  } catch {}
+
+  const base = path.basename(file);
+  const key1 = `video/${base}`;
+  const key2 = `video\\${base}`;
+  return (
+    STATIC_MOVIE_FILES[key1] ||
+    STATIC_MOVIE_FILES[key2] ||
+    STATIC_MOVIE_FILES[file] ||
+    null
+  );
 }
 
 /**
- * Gets all markdown files from the `video/` directory on local disk.
+ * Gets all markdown files from the `video/` directory on local disk with fallback to static registry.
  */
 export function getAllCustomMovieFiles(): string[] {
-  ensureContentDirExists();
+  let files: string[] = [];
   try {
-    const files = fs.readdirSync(CONTENT_DIR);
-    return files.filter(
-      (file) =>
-        (file.endsWith('.md') || file.endsWith('.markdown')) &&
-        !file.startsWith('.') &&
-        file.replace(/\.(md|markdown)$/i, '').trim().length > 0
-    );
+    ensureContentDirExists();
+    if (fs && typeof fs.existsSync === 'function' && fs.existsSync(CONTENT_DIR)) {
+      const dirFiles = fs.readdirSync(CONTENT_DIR);
+      files = dirFiles.filter(
+        (file) =>
+          (file.endsWith('.md') || file.endsWith('.markdown')) &&
+          !file.startsWith('.') &&
+          file.replace(/\.(md|markdown)$/i, '').trim().length > 0
+      );
+    }
   } catch (error) {
-    console.error('Error reading custom movie files:', error);
-    return [];
+    // Cloudflare Workers / Edge
   }
+
+  if (files.length === 0 && typeof STATIC_MOVIE_FILES === 'object') {
+    files = Object.keys(STATIC_MOVIE_FILES).map((k) => path.basename(k));
+  }
+
+  return files;
 }
 
 export async function getAllCustomMovieFilesAsync(): Promise<string[]> {
@@ -180,11 +211,12 @@ export function getCustomMovieTmdbMapping(): Record<string, string> {
 
   files.forEach((file) => {
     try {
-      const filePath = path.join(CONTENT_DIR, file);
-      const fileContent = fs.readFileSync(filePath, 'utf8');
-      const { data } = matter(fileContent);
-      if (data && data.tmdb_id) {
-        mapping[String(data.tmdb_id)] = file;
+      const fileContent = getRawMovieFileContent(file);
+      if (fileContent) {
+        const { data } = matter(fileContent);
+        if (data && data.tmdb_id) {
+          mapping[String(data.tmdb_id)] = file;
+        }
       }
     } catch (e) {
       console.error(`Error parsing mapping for ${file}:`, e);
@@ -200,12 +232,13 @@ export function getCustomMovieSlugsByTmdbId(): Record<number, string> {
 
   files.forEach((file) => {
     try {
-      const filePath = path.join(CONTENT_DIR, file);
-      const fileContent = fs.readFileSync(filePath, 'utf8');
-      const { data } = matter(fileContent);
-      if (data && data.tmdb_id) {
-        const baseSlug = file.replace(/\.(md|markdown)$/i, '');
-        mapping[Number(data.tmdb_id)] = baseSlug;
+      const fileContent = getRawMovieFileContent(file);
+      if (fileContent) {
+        const { data } = matter(fileContent);
+        if (data && data.tmdb_id) {
+          const baseSlug = file.replace(/\.(md|markdown)$/i, '');
+          mapping[Number(data.tmdb_id)] = baseSlug;
+        }
       }
     } catch (error) {
       console.error(`Error reading ${file} for TMDB ID mapping:`, error);
@@ -284,25 +317,14 @@ export async function getCustomMovieBySlug(slugOrId: string | number): Promise<C
 
       // 2. Fetch file content for matched file
       if (matchedFile) {
-        try {
-          const filePath = path.join(CONTENT_DIR, matchedFile);
-          if (fs.existsSync(filePath)) {
-            fileContent = fs.readFileSync(filePath, 'utf8');
-          }
-        } catch (err) {
-          console.error(`Error reading ${matchedFile}:`, err);
-        }
+        fileContent = getRawMovieFileContent(matchedFile) || '';
       }
 
       // 3. Match by frontmatter tmdb_id, exact title slug, or title-year slug across files
       if (!matchedFile || !fileContent) {
         for (const file of files) {
           try {
-            let rawContent = '';
-            const filePath = path.join(CONTENT_DIR, file);
-            if (fs.existsSync(filePath)) {
-              rawContent = fs.readFileSync(filePath, 'utf8');
-            }
+            const rawContent = getRawMovieFileContent(file);
             if (!rawContent) continue;
 
             const parsed = matter(rawContent);

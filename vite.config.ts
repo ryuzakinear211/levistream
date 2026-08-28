@@ -8,7 +8,6 @@ export default defineConfig({
   plugins: [
     vinext({
       cache: { data: kvDataAdapter(), cdn: cdnAdapter() },
-      prerender: { routes: "*" },
     }),
     cloudflare({
       viteEnvironment: {

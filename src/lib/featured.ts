@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import { Movie, TVShow } from '@/types/tmdb';
-import { getImageUrl } from '@/lib/tmdb';
+import { getImageUrl, getMovieDetails, getTVShowDetails } from '@/lib/tmdb';
 import { getAllFeaturedCustomMovies } from '@/lib/markdownMovies';
 import { getAllFeaturedCustomTV } from '@/lib/markdownTV';
 import siteConfig, { FeaturedItem } from '@/config';
@@ -11,6 +11,7 @@ import { memoryCache } from '@/lib/cache';
 import { serializeTinaMovie, serializeTinaTVShow } from '@/lib/tina/schema';
 import { isMongoConfigured } from '@/lib/mongodb/client';
 import { saveMongoMovie, saveMongoTVShow, getMongoMovies, getMongoTVShows } from '@/lib/mongodb/service';
+import { STATIC_MOVIE_FILES, STATIC_TV_FILES } from '@/lib/staticContentRegistry';
 
 const VIDEO_DIR = path.join(process.cwd(), 'video');
 const TV_DIR = path.join(process.cwd(), 'tv');
@@ -46,17 +47,17 @@ export async function enforceFeaturedLimit(type: 'movie' | 'tv', limit: number =
           if (!slug) continue;
 
           // 1. Update file on disk if exists
-          const filePath = path.join(VIDEO_DIR, `${slug}.md`);
-          if (fs.existsSync(filePath)) {
-            try {
+          try {
+            const filePath = path.join(VIDEO_DIR, `${slug}.md`);
+            if (fs && typeof fs.existsSync === 'function' && fs.existsSync(filePath)) {
               const raw = fs.readFileSync(filePath, 'utf8');
               const { data, content } = matter(raw);
               data.featured = false;
               const updatedContent = serializeTinaMovie(data, content);
               fs.writeFileSync(filePath, updatedContent, 'utf8');
-            } catch (e) {
-              console.warn(`[featured] Failed to demote disk movie ${slug}:`, e);
             }
+          } catch (e) {
+            // Edge runtime / Cloudflare Workers
           }
 
           // 2. Update MongoDB if configured
@@ -76,17 +77,17 @@ export async function enforceFeaturedLimit(type: 'movie' | 'tv', limit: number =
           if (!showSlug) continue;
 
           // 1. Update file on disk if exists
-          const indexPath = path.join(TV_DIR, showSlug, '_index.md');
-          if (fs.existsSync(indexPath)) {
-            try {
+          try {
+            const indexPath = path.join(TV_DIR, showSlug, '_index.md');
+            if (fs && typeof fs.existsSync === 'function' && fs.existsSync(indexPath)) {
               const raw = fs.readFileSync(indexPath, 'utf8');
               const { data, content } = matter(raw);
               data.featured = false;
               const updatedContent = serializeTinaTVShow(data, content);
               fs.writeFileSync(indexPath, updatedContent, 'utf8');
-            } catch (e) {
-              console.warn(`[featured] Failed to demote disk TV show ${showSlug}:`, e);
             }
+          } catch (e) {
+            // Edge runtime / Cloudflare Workers
           }
 
           // 2. Update MongoDB if configured
@@ -105,8 +106,7 @@ export async function enforceFeaturedLimit(type: 'movie' | 'tv', limit: number =
 
 /**
  * Loads Featured Hero MOVIES for Home Page:
- * ONLY uses custom markdown movies that have frontmatter `featured: true`.
- * Automatically enforces featured limit from siteConfig.
+ * Sourced from custom markdown files and embedded static registry.
  */
 export async function getEnrichedFeaturedMovies(options: {
   maxItems?: number;
@@ -119,7 +119,46 @@ export async function getEnrichedFeaturedMovies(options: {
     async () => {
       // Enforce auto-eviction if count exceeds limit
       await enforceFeaturedLimit('movie', limit).catch(() => {});
-      const customMovies = await getAllFeaturedCustomMovies().catch(() => []);
+      let customMovies = await getAllFeaturedCustomMovies().catch(() => []);
+
+      // If customMovies is empty (e.g. on Cloudflare Workers edge isolate without fs)
+      if (customMovies.length === 0 && typeof STATIC_MOVIE_FILES === 'object') {
+        const staticList: FeaturedItem[] = [];
+        for (const [filePath, rawContent] of Object.entries(STATIC_MOVIE_FILES)) {
+          try {
+            const { data } = matter(rawContent);
+            if (data && (data.featured === true || String(data.featured).toLowerCase() === 'true')) {
+              const tmdbId = Number(data.tmdb_id);
+              const tmdbDetails = tmdbId ? await getMovieDetails(tmdbId).catch(() => null) : null;
+              const slug = path.basename(filePath, '.md');
+              staticList.push({
+                id: tmdbId || slug,
+                tmdbId: tmdbId,
+                title: data.title || tmdbDetails?.title || slug,
+                tagline: data.tagline || tmdbDetails?.tagline || '',
+                overview: data.deskripsi || data.description || tmdbDetails?.overview || '',
+                backdropUrl: data.image_url || (tmdbDetails?.backdrop_path ? getImageUrl(tmdbDetails.backdrop_path, 'w1280') : ''),
+                posterUrl: tmdbDetails?.poster_path ? getImageUrl(tmdbDetails.poster_path, 'w500') : (data.image_url || ''),
+                rating: Number(data.rating || tmdbDetails?.vote_average || 0),
+                year: tmdbDetails?.release_date ? new Date(tmdbDetails.release_date).getFullYear() : '',
+                duration: tmdbDetails?.runtime ? `${Math.floor(tmdbDetails.runtime / 60)}h ${tmdbDetails.runtime % 60}m` : '',
+                type: 'movie',
+                genres: tmdbDetails?.genres?.map((g) => g.name) || [],
+                link: `/movie/${slug}`,
+                badge: 'Featured Movie',
+                featured: true,
+                isCustom: true,
+              });
+            }
+          } catch (e) {
+            console.error('Error parsing static movie featured:', e);
+          }
+        }
+        if (staticList.length > 0) {
+          customMovies = staticList;
+        }
+      }
+
       return customMovies.slice(0, limit);
     },
     60_000,
@@ -129,8 +168,7 @@ export async function getEnrichedFeaturedMovies(options: {
 
 /**
  * Loads Featured Hero TV SERIES for TV Page:
- * ONLY uses custom markdown TV shows that have `featured: true` in _index.md frontmatter.
- * Automatically enforces featured limit from siteConfig.
+ * Sourced from custom markdown TV shows and embedded static registry.
  */
 export async function getEnrichedFeaturedTV(options: {
   maxItems?: number;
@@ -143,7 +181,46 @@ export async function getEnrichedFeaturedTV(options: {
     async () => {
       // Enforce auto-eviction if count exceeds limit
       await enforceFeaturedLimit('tv', limit).catch(() => {});
-      const customTV = await getAllFeaturedCustomTV().catch(() => []);
+      let customTV = await getAllFeaturedCustomTV().catch(() => []);
+
+      // If customTV is empty (e.g. on Cloudflare Workers edge isolate without fs)
+      if (customTV.length === 0 && typeof STATIC_TV_FILES === 'object') {
+        const staticList: FeaturedItem[] = [];
+        for (const [filePath, rawContent] of Object.entries(STATIC_TV_FILES)) {
+          if (!filePath.endsWith('_index.md') && !filePath.endsWith('index.md')) continue;
+          try {
+            const { data } = matter(rawContent);
+            if (data && (data.featured === true || String(data.featured).toLowerCase() === 'true')) {
+              const tmdbId = Number(data.tmdb_id);
+              const showSlug = filePath.replace(/^tv[\\\/]/, '').split(/[\\\/]/)[0];
+              const tmdbDetails = tmdbId ? await getTVShowDetails(tmdbId).catch(() => null) : null;
+              staticList.push({
+                id: tmdbId || showSlug,
+                tmdbId: tmdbId,
+                title: data.title || tmdbDetails?.name || showSlug,
+                tagline: data.tagline || tmdbDetails?.tagline || '',
+                overview: data.deskripsi || data.description || tmdbDetails?.overview || '',
+                backdropUrl: data.image_url || (tmdbDetails?.backdrop_path ? getImageUrl(tmdbDetails.backdrop_path, 'w1280') : ''),
+                posterUrl: tmdbDetails?.poster_path ? getImageUrl(tmdbDetails.poster_path, 'w500') : (data.image_url || ''),
+                rating: Number(data.rating || tmdbDetails?.vote_average || 0),
+                year: tmdbDetails?.first_air_date ? new Date(tmdbDetails.first_air_date).getFullYear() : '',
+                type: 'tv',
+                genres: tmdbDetails?.genres?.map((g) => g.name) || [],
+                link: `/tv/${showSlug}`,
+                badge: 'Featured Series',
+                featured: true,
+                isCustom: true,
+              });
+            }
+          } catch (e) {
+            console.error('Error parsing static TV featured:', e);
+          }
+        }
+        if (staticList.length > 0) {
+          customTV = staticList;
+        }
+      }
+
       return customTV.slice(0, limit);
     },
     60_000,
@@ -159,5 +236,6 @@ export async function getEnrichedFeaturedItems(options: GetFeaturedOptions = {})
     maxItems: options.maxItems || siteConfig.featuredLimit || 7,
   });
 }
+
 
 

@@ -95,15 +95,41 @@ export interface MergedTVShowDetail extends TVShowDetail {
   activeEpisode?: CustomEpisode | null;
 }
 
+import { STATIC_TV_FILES } from '@/lib/staticContentRegistry';
+
 const TV_CONTENT_DIR = path.join(process.cwd(), 'tv');
 
 /**
  * Ensures the tv/ content directory exists.
  */
 function ensureTVDirExists(): void {
-  if (!fs.existsSync(TV_CONTENT_DIR)) {
-    fs.mkdirSync(TV_CONTENT_DIR, { recursive: true });
-  }
+  try {
+    if (fs && typeof fs.existsSync === 'function' && !fs.existsSync(TV_CONTENT_DIR)) {
+      fs.mkdirSync(TV_CONTENT_DIR, { recursive: true });
+    }
+  } catch {}
+}
+
+export function getRawTVFileContent(relOrFullPath: string): string | null {
+  try {
+    if (fs && typeof fs.existsSync === 'function' && fs.existsSync(relOrFullPath)) {
+      return fs.readFileSync(relOrFullPath, 'utf8');
+    }
+  } catch {}
+
+  const normalized = relOrFullPath
+    .replace(/^[a-zA-Z]:[\\\/].*?[\\\/]tv[\\\/]/i, '')
+    .replace(/^tv[\\\/]/i, '')
+    .replace(/\\/g, '/');
+
+  const key1 = `tv/${normalized}`;
+  const key2 = `tv\\${normalized.replace(/\//g, '\\')}`;
+  return (
+    STATIC_TV_FILES[key1] ||
+    STATIC_TV_FILES[key2] ||
+    STATIC_TV_FILES[relOrFullPath] ||
+    null
+  );
 }
 
 /**
@@ -130,17 +156,32 @@ function parseSeasonNumber(folderName: string): number | null {
 }
 
 /**
- * Gets all TV show directory names from the `tv/` folder on local disk.
+ * Gets all TV show directory names from the `tv/` folder on local disk with fallback to static registry.
  */
 export function getAllCustomTVShowDirs(): string[] {
-  ensureTVDirExists();
+  let dirs: string[] = [];
   try {
-    const entries = fs.readdirSync(TV_CONTENT_DIR, { withFileTypes: true });
-    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    ensureTVDirExists();
+    if (fs && typeof fs.existsSync === 'function' && fs.existsSync(TV_CONTENT_DIR)) {
+      const entries = fs.readdirSync(TV_CONTENT_DIR, { withFileTypes: true });
+      dirs = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    }
   } catch (error) {
-    console.error('Error reading tv directories:', error);
-    return [];
+    // Edge/Cloudflare Workers
   }
+
+  if (dirs.length === 0 && typeof STATIC_TV_FILES === 'object') {
+    const set = new Set<string>();
+    for (const key of Object.keys(STATIC_TV_FILES)) {
+      const parts = key.replace(/^tv[\\\/]/, '').split(/[\\\/]/);
+      if (parts.length > 0 && parts[0]) {
+        set.add(parts[0]);
+      }
+    }
+    dirs = Array.from(set);
+  }
+
+  return dirs;
 }
 
 export async function getAllCustomTVShowDirsAsync(): Promise<string[]> {
@@ -363,17 +404,13 @@ export async function getCustomTVShowBySlug(showSlugOrTmdbId: string | number): 
   // 2. Search by tmdb_id, title slug, or trailing ID in _index.md
   if (!matchedDir) {
     for (const dir of showDirs) {
-      const fullPath = path.join(TV_CONTENT_DIR, dir);
-      const indexPath = fs.existsSync(path.join(fullPath, '_index.md'))
-        ? path.join(fullPath, '_index.md')
-        : fs.existsSync(path.join(fullPath, 'index.md'))
-        ? path.join(fullPath, 'index.md')
-        : null;
+      const indexContent =
+        getRawTVFileContent(`tv/${dir}/_index.md`) ||
+        getRawTVFileContent(`tv/${dir}/index.md`);
 
-      if (indexPath) {
+      if (indexContent) {
         try {
-          const content = fs.readFileSync(indexPath, 'utf8');
-          const { data } = matter(content);
+          const { data } = matter(indexContent);
           if (data) {
             const tmdbIdStr = String(data.tmdb_id || '').trim();
             const titleSlug = cleanSlug(data.title || data.name);
@@ -381,7 +418,7 @@ export async function getCustomTVShowBySlug(showSlugOrTmdbId: string | number): 
             // Direct TMDB ID or trailing ID match
             if (tmdbIdStr && (tmdbIdStr === searchKey || tmdbIdStr === trailingId)) {
               matchedDir = dir;
-              showDirFullPath = fullPath;
+              showDirFullPath = path.join(TV_CONTENT_DIR, dir);
               break;
             }
 
@@ -393,12 +430,12 @@ export async function getCustomTVShowBySlug(showSlugOrTmdbId: string | number): 
                 searchKey.startsWith(titleSlug))
             ) {
               matchedDir = dir;
-              showDirFullPath = fullPath;
+              showDirFullPath = path.join(TV_CONTENT_DIR, dir);
               break;
             }
           }
         } catch (e) {
-          console.error(`Error reading ${indexPath}:`, e);
+          console.error(`Error reading index for ${dir}:`, e);
         }
       }
     }
@@ -412,22 +449,19 @@ export async function getCustomTVShowBySlug(showSlugOrTmdbId: string | number): 
   let indexFrontmatter: CustomTVFrontmatter = { tmdb_id: 0 };
   let indexContentHtml: string | null = null;
 
-  const indexPath = fs.existsSync(path.join(showDirFullPath, '_index.md'))
-    ? path.join(showDirFullPath, '_index.md')
-    : fs.existsSync(path.join(showDirFullPath, 'index.md'))
-    ? path.join(showDirFullPath, 'index.md')
-    : null;
+  const indexRaw =
+    getRawTVFileContent(`tv/${matchedDir}/_index.md`) ||
+    getRawTVFileContent(`tv/${matchedDir}/index.md`);
 
-  if (indexPath) {
+  if (indexRaw) {
     try {
-      const indexRaw = fs.readFileSync(indexPath, 'utf8');
       const { data, content } = matter(indexRaw);
       indexFrontmatter = data as CustomTVFrontmatter;
       if (content && content.trim()) {
         indexContentHtml = await marked.parse(content);
       }
     } catch (e) {
-      console.error(`Error parsing ${indexPath}:`, e);
+      console.error(`Error parsing index for ${matchedDir}:`, e);
     }
   }
 
@@ -437,10 +471,27 @@ export async function getCustomTVShowBySlug(showSlugOrTmdbId: string | number): 
   let hasSeasons = false;
 
   try {
-    const entries = fs.readdirSync(showDirFullPath, { withFileTypes: true });
+    let subDirs: { name: string; isDirectory: () => boolean }[] = [];
+    try {
+      if (fs && typeof fs.existsSync === 'function' && fs.existsSync(showDirFullPath)) {
+        const entries = fs.readdirSync(showDirFullPath, { withFileTypes: true });
+        subDirs = entries.filter((e) => e.isDirectory());
+      }
+    } catch {}
 
-    // Check if subdirectories exist (Season folders like s1, s2, season-1)
-    const subDirs = entries.filter((e) => e.isDirectory());
+    if (subDirs.length === 0 && typeof STATIC_TV_FILES === 'object') {
+      const seasonSet = new Set<string>();
+      for (const key of Object.keys(STATIC_TV_FILES)) {
+        const parts = key.replace(/^tv[\\\/]/, '').split(/[\\\/]/);
+        if (parts[0] === matchedDir && parts.length >= 3) {
+          seasonSet.add(parts[1]);
+        }
+      }
+      subDirs = Array.from(seasonSet).map((s) => ({
+        name: s,
+        isDirectory: () => true,
+      }));
+    }
 
     if (subDirs.length > 0) {
       hasSeasons = true;
@@ -455,9 +506,24 @@ export async function getCustomTVShowBySlug(showSlugOrTmdbId: string | number): 
       for (const sDir of subDirs) {
         const seasonNumber = parseSeasonNumber(sDir.name);
         const seasonDirPath = path.join(showDirFullPath, sDir.name);
-        const epFiles = fs
-          .readdirSync(seasonDirPath)
-          .filter((f) => f.endsWith('.md') || f.endsWith('.markdown'));
+        let epFiles: string[] = [];
+
+        try {
+          if (fs && typeof fs.existsSync === 'function' && fs.existsSync(seasonDirPath)) {
+            epFiles = fs
+              .readdirSync(seasonDirPath)
+              .filter((f) => f.endsWith('.md') || f.endsWith('.markdown'));
+          }
+        } catch {}
+
+        if (epFiles.length === 0 && typeof STATIC_TV_FILES === 'object') {
+          for (const key of Object.keys(STATIC_TV_FILES)) {
+            const parts = key.replace(/^tv[\\\/]/, '').split(/[\\\/]/);
+            if (parts[0] === matchedDir && parts[1] === sDir.name && parts.length === 3) {
+              epFiles.push(parts[2]);
+            }
+          }
+        }
 
         // Sort episode files (e.g. e1, e2, e3)
         epFiles.sort((a, b) => parseEpisodeNumber(a, 0) - parseEpisodeNumber(b, 0));
@@ -467,8 +533,8 @@ export async function getCustomTVShowBySlug(showSlugOrTmdbId: string | number): 
         for (let index = 0; index < epFiles.length; index++) {
           const file = epFiles[index];
           try {
-            const filePath = path.join(seasonDirPath, file);
-            const raw = fs.readFileSync(filePath, 'utf8');
+            const raw = getRawTVFileContent(`tv/${matchedDir}/${sDir.name}/${file}`);
+            if (!raw) continue;
             const { data, content } = matter(raw);
             const frontmatter = data as CustomEpisodeFrontmatter;
 
@@ -523,15 +589,31 @@ export async function getCustomTVShowBySlug(showSlugOrTmdbId: string | number): 
     } else {
       // Flat episodes directly inside show folder (no season folders)
       hasSeasons = false;
-      const epFiles = entries
-        .filter(
-          (e) =>
-            e.isFile() &&
-            (e.name.endsWith('.md') || e.name.endsWith('.markdown')) &&
-            e.name !== '_index.md' &&
-            e.name !== 'index.md'
-        )
-        .map((e) => e.name);
+      let epFiles: string[] = [];
+
+      try {
+        if (fs && typeof fs.existsSync === 'function' && fs.existsSync(showDirFullPath)) {
+          const entries = fs.readdirSync(showDirFullPath, { withFileTypes: true });
+          epFiles = entries
+            .filter(
+              (e) =>
+                e.isFile() &&
+                (e.name.endsWith('.md') || e.name.endsWith('.markdown')) &&
+                e.name !== '_index.md' &&
+                e.name !== 'index.md'
+            )
+            .map((e) => e.name);
+        }
+      } catch {}
+
+      if (epFiles.length === 0 && typeof STATIC_TV_FILES === 'object') {
+        for (const key of Object.keys(STATIC_TV_FILES)) {
+          const parts = key.replace(/^tv[\\\/]/, '').split(/[\\\/]/);
+          if (parts[0] === matchedDir && parts.length === 2 && parts[1] !== '_index.md' && parts[1] !== 'index.md') {
+            epFiles.push(parts[1]);
+          }
+        }
+      }
 
       epFiles.sort((a, b) => parseEpisodeNumber(a, 0) - parseEpisodeNumber(b, 0));
 
@@ -540,8 +622,8 @@ export async function getCustomTVShowBySlug(showSlugOrTmdbId: string | number): 
       for (let index = 0; index < epFiles.length; index++) {
         const file = epFiles[index];
         try {
-          const filePath = path.join(showDirFullPath, file);
-          const raw = fs.readFileSync(filePath, 'utf8');
+          const raw = getRawTVFileContent(`tv/${matchedDir}/${file}`);
+          if (!raw) continue;
           const { data, content } = matter(raw);
           const frontmatter = data as CustomEpisodeFrontmatter;
 
