@@ -8,5 +8,7 @@ deskripsi: >-
 image_url: 'https://image.tmdb.org/t/p/w1280/ruwzidqanSyhhMEk6kCVd9BLui1.jpg'
 rating: 8.2
 featured: true
+trending: true
+language: EN
 ---
 

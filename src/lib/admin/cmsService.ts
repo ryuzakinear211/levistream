@@ -35,7 +35,9 @@ import {
   deleteMongoTVShow,
   deleteMongoEpisode,
   syncMongoDBToGitHub,
+  isMongoConfigured,
 } from '@/lib/mongodb/service';
+import { STATIC_MOVIE_FILES, STATIC_TV_FILES } from '@/lib/staticContentRegistry';
 
 const VIDEO_DIR = path.join(process.cwd(), 'video');
 const TV_DIR = path.join(process.cwd(), 'tv');
@@ -128,12 +130,18 @@ export async function fetchPaginatedAdminContent(
   const tvPage = Math.max(1, Number(options.tvPage) || 1);
   const search = (options.search || '').trim().toLowerCase();
 
-  // 1. Fetch Paginated Data from MongoDB in parallel (takes ~5-15ms)
-  const [mongoMoviesPaged, mongoTVPaged, counts] = await Promise.all([
-    getPaginatedMongoMovies({ page: moviePage, limit, search }),
-    getPaginatedMongoTVShows({ page: tvPage, limit, search }),
-    getMongoContentCounts(),
-  ]);
+  // 1. Fetch Paginated Data from MongoDB only if configured
+  const [mongoMoviesPaged, mongoTVPaged, counts] = isMongoConfigured()
+    ? await Promise.all([
+        getPaginatedMongoMovies({ page: moviePage, limit, search }),
+        getPaginatedMongoTVShows({ page: tvPage, limit, search }),
+        getMongoContentCounts(),
+      ])
+    : [
+        { items: [], total: 0, totalPages: 1 },
+        { items: [], total: 0, totalPages: 1 },
+        { totalMovies: 0, totalTvShows: 0, totalEpisodes: 0 },
+      ];
 
   const hasMongoMovies = mongoMoviesPaged.items.length > 0;
   const hasMongoTV = mongoTVPaged.items.length > 0;
@@ -170,6 +178,29 @@ export async function fetchPaginatedAdminContent(
                 return null;
               }
             }).filter(Boolean) as any[];
+          }
+
+          // Fallback to static registry for Cloudflare Workers / Edge where local filesystem is unavailable
+          if (diskMovies.length === 0 && typeof STATIC_MOVIE_FILES === 'object') {
+            const seenSlugs = new Set<string>();
+            for (const [key, raw] of Object.entries(STATIC_MOVIE_FILES)) {
+              const normKey = key.replace(/\\/g, '/');
+              const file = path.basename(normKey);
+              const slug = file.replace(/\.(md|markdown)$/i, '');
+              if (seenSlugs.has(slug)) continue;
+              seenSlugs.add(slug);
+              try {
+                const { data, content } = matter(raw);
+                diskMovies.push({
+                  filename: file,
+                  slug,
+                  relativePath: `video/${file}`,
+                  frontmatter: data || {},
+                  content: content || '',
+                  updatedAt: Date.now(),
+                });
+              } catch {}
+            }
           }
 
           if (fs.existsSync(TV_DIR)) {
@@ -228,6 +259,57 @@ export async function fetchPaginatedAdminContent(
                 episodes,
               });
             }
+          }
+
+          // Fallback to static registry for Cloudflare Workers / Edge
+          if (diskTV.length === 0 && typeof STATIC_TV_FILES === 'object') {
+            const showsMap = new Map<string, any>();
+            for (const [key, raw] of Object.entries(STATIC_TV_FILES)) {
+              const normKey = key.replace(/\\/g, '/');
+              const parts = normKey.split('/');
+              if (parts[0] !== 'tv' || parts.length < 2) continue;
+              const showSlug = parts[1];
+              if (!showsMap.has(showSlug)) {
+                showsMap.set(showSlug, {
+                  showSlug,
+                  relativePath: `tv/${showSlug}/_index.md`,
+                  indexFrontmatter: {},
+                  indexContent: '',
+                  updatedAt: Date.now(),
+                  episodes: [],
+                });
+              }
+              const show = showsMap.get(showSlug);
+              const lastPart = parts[parts.length - 1];
+              if (lastPart === '_index.md' || lastPart === 'index.md') {
+                try {
+                  const { data, content } = matter(raw);
+                  show.indexFrontmatter = data || {};
+                  show.indexContent = content || '';
+                } catch {}
+              } else if (/\.(md|markdown)$/i.test(lastPart)) {
+                try {
+                  const { data, content } = matter(raw);
+                  const seasonFolder = parts.length > 3 ? parts[2] : 's1';
+                  const epSlug = lastPart.replace(/\.(md|markdown)$/i, '');
+                  if (!show.episodes.some((e: any) => e.slug === epSlug && e.seasonFolder === seasonFolder)) {
+                    show.episodes.push({
+                      showSlug,
+                      seasonFolder,
+                      filename: lastPart,
+                      slug: epSlug,
+                      relativePath: `tv/${showSlug}/${seasonFolder}/${lastPart}`,
+                      frontmatter: data || {},
+                      content: content || '',
+                      displayTitle: data?.title || epSlug,
+                      posterUrl: data?.image_url ? getImageUrl(data.image_url, 'w500') : null,
+                      updatedAt: Date.now(),
+                    });
+                  }
+                } catch {}
+              }
+            }
+            diskTV = Array.from(showsMap.values());
           }
           return { movies: diskMovies, tvShows: diskTV };
         },
@@ -495,78 +577,80 @@ export async function fetchAllAdminContent(ghConfig: GitHubOptions) {
       const localMoviesMap = new Map<string, any>();
       const localTvShowsMap = new Map<string, any>();
 
-      // 1. Fetch from MongoDB (Persistent Cloud Database)
-      try {
-        const mongoMovies = await getMongoMovies();
-        const mongoShows = await getMongoTVShows();
+      // 1. Fetch from MongoDB (Persistent Cloud Database) only if configured
+      if (isMongoConfigured()) {
+        try {
+          const mongoMovies = await getMongoMovies();
+          const mongoShows = await getMongoTVShows();
 
-    for (const m of mongoMovies) {
-      const rel = `video/${m.slug}.md`;
-      localMoviesMap.set(rel, {
-        filename: `${m.slug}.md`,
-        slug: m.slug,
-        relativePath: rel,
-        frontmatter: {
-          tmdb_id: m.tmdb_id,
-          title: m.title,
-          videourl: m.videourl,
-          image_url: m.image_url,
-          deskripsi: m.deskripsi,
-          rating: m.rating,
-          featured: m.featured,
-          trending: m.trending,
-          language: m.language ? String(m.language).toUpperCase() : 'ID',
-          weight: m.weight !== undefined && m.weight !== null ? Number(m.weight) : undefined,
-          subtitles: m.subtitles,
-          duration: m.duration,
-        },
-        content: m.content || '',
-        updatedAt: m.updatedAt || Date.now(),
-      });
-    }
+          for (const m of mongoMovies) {
+            const rel = `video/${m.slug}.md`;
+            localMoviesMap.set(rel, {
+              filename: `${m.slug}.md`,
+              slug: m.slug,
+              relativePath: rel,
+              frontmatter: {
+                tmdb_id: m.tmdb_id,
+                title: m.title,
+                videourl: m.videourl,
+                image_url: m.image_url,
+                deskripsi: m.deskripsi,
+                rating: m.rating,
+                featured: m.featured,
+                trending: m.trending,
+                language: m.language ? String(m.language).toUpperCase() : 'ID',
+                weight: m.weight !== undefined && m.weight !== null ? Number(m.weight) : undefined,
+                subtitles: m.subtitles,
+                duration: m.duration,
+              },
+              content: m.content || '',
+              updatedAt: m.updatedAt || Date.now(),
+            });
+          }
 
-    for (const s of mongoShows) {
-      localTvShowsMap.set(s.showSlug, {
-        showSlug: s.showSlug,
-        relativePath: `tv/${s.showSlug}/_index.md`,
-        indexFrontmatter: {
-          tmdb_id: s.tmdb_id,
-          title: s.title,
-          image_url: s.image_url,
-          deskripsi: s.deskripsi,
-          rating: s.rating,
-          featured: s.featured,
-          trending: s.trending,
-          language: s.language ? String(s.language).toUpperCase() : 'ID',
-          weight: s.weight !== undefined && s.weight !== null ? Number(s.weight) : undefined,
-        },
-        indexContent: s.content || '',
-        updatedAt: s.updatedAt || Date.now(),
-        episodes: (s.episodes || []).map((ep) => ({
-          showSlug: s.showSlug,
-          seasonFolder: ep.seasonFolder,
-          filename: `${ep.episode}.md`,
-          slug: ep.slug || ep.episode,
-          relativePath: `tv/${s.showSlug}/${ep.seasonFolder}/${ep.episode}.md`,
-          frontmatter: {
-            title: ep.title,
-            videourl: ep.videourl,
-            image_url: ep.image_url,
-            deskripsi: ep.deskripsi,
-            rating: ep.rating,
-            duration: ep.duration,
-            subtitles: ep.subtitles,
-          },
-          content: ep.content || '',
-          displayTitle: ep.title || ep.episode,
-          posterUrl: ep.image_url ? getImageUrl(ep.image_url, 'w500') : null,
-          updatedAt: ep.updatedAt || Date.now(),
-        })),
-      });
-    }
-  } catch (mongoErr) {
-    console.warn('[cmsService] MongoDB fetch notice:', mongoErr);
-  }
+          for (const s of mongoShows) {
+            localTvShowsMap.set(s.showSlug, {
+              showSlug: s.showSlug,
+              relativePath: `tv/${s.showSlug}/_index.md`,
+              indexFrontmatter: {
+                tmdb_id: s.tmdb_id,
+                title: s.title,
+                image_url: s.image_url,
+                deskripsi: s.deskripsi,
+                rating: s.rating,
+                featured: s.featured,
+                trending: s.trending,
+                language: s.language ? String(s.language).toUpperCase() : 'ID',
+                weight: s.weight !== undefined && s.weight !== null ? Number(s.weight) : undefined,
+              },
+              indexContent: s.content || '',
+              updatedAt: s.updatedAt || Date.now(),
+              episodes: (s.episodes || []).map((ep) => ({
+                showSlug: s.showSlug,
+                seasonFolder: ep.seasonFolder,
+                filename: `${ep.episode}.md`,
+                slug: ep.slug || ep.episode,
+                relativePath: `tv/${s.showSlug}/${ep.seasonFolder}/${ep.episode}.md`,
+                frontmatter: {
+                  title: ep.title,
+                  videourl: ep.videourl,
+                  image_url: ep.image_url,
+                  deskripsi: ep.deskripsi,
+                  rating: ep.rating,
+                  duration: ep.duration,
+                  subtitles: ep.subtitles,
+                },
+                content: ep.content || '',
+                displayTitle: ep.title || ep.episode,
+                posterUrl: ep.image_url ? getImageUrl(ep.image_url, 'w500') : null,
+                updatedAt: ep.updatedAt || Date.now(),
+              })),
+            });
+          }
+        } catch (mongoErr) {
+          console.warn('[cmsService] MongoDB fetch notice:', mongoErr);
+        }
+      }
 
   // 2. Read local disk files as fallback or overlay
   let movieFiles: string[] = [];
@@ -697,6 +781,77 @@ export async function fetchAllAdminContent(ghConfig: GitHubOptions) {
       updatedAt,
       episodes,
     });
+  }
+
+  // Fallback to static registry for Cloudflare Workers / Edge
+  if (localMoviesMap.size === 0 && typeof STATIC_MOVIE_FILES === 'object') {
+    for (const [key, raw] of Object.entries(STATIC_MOVIE_FILES)) {
+      const normKey = key.replace(/\\/g, '/');
+      const file = path.basename(normKey);
+      const slug = file.replace(/\.(md|markdown)$/i, '');
+      const rel = `video/${file}`;
+      if (!localMoviesMap.has(rel)) {
+        try {
+          const { data, content } = matter(raw);
+          localMoviesMap.set(rel, {
+            filename: file,
+            slug,
+            relativePath: rel,
+            frontmatter: data || {},
+            content: content || '',
+            updatedAt: Date.now(),
+          });
+        } catch {}
+      }
+    }
+  }
+
+  if (localTvShowsMap.size === 0 && typeof STATIC_TV_FILES === 'object') {
+    for (const [key, raw] of Object.entries(STATIC_TV_FILES)) {
+      const normKey = key.replace(/\\/g, '/');
+      const parts = normKey.split('/');
+      if (parts[0] !== 'tv' || parts.length < 2) continue;
+      const showSlug = parts[1];
+      if (!localTvShowsMap.has(showSlug)) {
+        localTvShowsMap.set(showSlug, {
+          showSlug,
+          relativePath: `tv/${showSlug}/_index.md`,
+          indexFrontmatter: {},
+          indexContent: '',
+          updatedAt: Date.now(),
+          episodes: [],
+        });
+      }
+      const show = localTvShowsMap.get(showSlug);
+      const lastPart = parts[parts.length - 1];
+      if (lastPart === '_index.md' || lastPart === 'index.md') {
+        try {
+          const { data, content } = matter(raw);
+          show.indexFrontmatter = data || {};
+          show.indexContent = content || '';
+        } catch {}
+      } else if (/\.(md|markdown)$/i.test(lastPart)) {
+        try {
+          const { data, content } = matter(raw);
+          const seasonFolder = parts.length > 3 ? parts[2] : 's1';
+          const epSlug = lastPart.replace(/\.(md|markdown)$/i, '');
+          if (!show.episodes.some((e: any) => e.slug === epSlug && e.seasonFolder === seasonFolder)) {
+            show.episodes.push({
+              showSlug,
+              seasonFolder,
+              filename: lastPart,
+              slug: epSlug,
+              relativePath: `tv/${showSlug}/${seasonFolder}/${lastPart}`,
+              frontmatter: data || {},
+              content: content || '',
+              displayTitle: data?.title || epSlug,
+              posterUrl: data?.image_url ? getImageUrl(data.image_url, 'w500') : null,
+              updatedAt: Date.now(),
+            });
+          }
+        } catch {}
+      }
+    }
   }
 
   const rawMovies = Array.from(localMoviesMap.values());

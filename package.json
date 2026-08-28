@@ -4,14 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/generate-static-registry.js && next build",
     "start": "next start",
     "lint": "next lint",
     "tina:dev": "tinacms dev -c \"next dev\"",
     "tina:build": "tinacms build",
-    "build:worker": "opennextjs-cloudflare build",
+    "build:worker": "node scripts/generate-static-registry.js && opennextjs-cloudflare build",
     "preview:worker": "opennextjs-cloudflare preview",
-    "deploy:worker": "opennextjs-cloudflare deploy"
+    "deploy:worker": "node scripts/generate-static-registry.js && opennextjs-cloudflare deploy",
+    "postinstall": "node scripts/patch-opennext.js && node scripts/generate-static-registry.js"
   },
   "dependencies": {
     "autoprefixer": "^10.0.1",

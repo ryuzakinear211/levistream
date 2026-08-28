@@ -5,14 +5,14 @@ const uri = MONGODB_CONFIG.uri;
 
 // Serverless-optimized options for Vercel and AWS Lambda
 const options: MongoClientOptions = {
-  maxPoolSize: 10,
+  maxPoolSize: 5,
   minPoolSize: 0,
-  maxIdleTimeMS: 5000, // Close idle connections quickly to prevent stale TLS sockets on Vercel
-  serverSelectionTimeoutMS: 8000,
-  connectTimeoutMS: 8000,
-  socketTimeoutMS: 20000,
-  retryReads: true,
-  retryWrites: true,
+  maxIdleTimeMS: 3000,
+  serverSelectionTimeoutMS: 2000,
+  connectTimeoutMS: 2000,
+  socketTimeoutMS: 5000,
+  retryReads: false,
+  retryWrites: false,
   tls: true,
 };
 
@@ -23,20 +23,32 @@ declare global {
   var _mongoClientInstance: MongoClient | undefined;
 }
 
+function isEdgeOrWorker(): boolean {
+  return (
+    typeof (globalThis as any).WebSocketPair !== 'undefined' ||
+    process.env.NEXT_RUNTIME === 'edge' ||
+    typeof (process.versions as any)?.workerd !== 'undefined' ||
+    process.env.OPEN_NEXT === 'true'
+  );
+}
+
 export function isMongoConfigured(): boolean {
-  const currentUri = process.env.MONGODB_URI || MONGODB_CONFIG.uri || '';
+  if (isEdgeOrWorker()) {
+    return false;
+  }
+  const currentUri = process.env.MONGODB_URI;
   return Boolean(currentUri && currentUri.trim().startsWith('mongodb'));
 }
 
 function createNewClient(): { client: MongoClient; promise: Promise<MongoClient> } {
-  const currentUri = process.env.MONGODB_URI || MONGODB_CONFIG.uri || '';
-  if (!currentUri || !currentUri.trim().startsWith('mongodb')) {
-    throw new Error('MONGODB_URI is not configured in environment variables');
+  if (!isMongoConfigured()) {
+    throw new Error('MongoDB is not configured or running in unsupported edge environment');
   }
 
+  const currentUri = process.env.MONGODB_URI || '';
   const newClient = new MongoClient(currentUri, options);
   const promise = newClient.connect().catch((err) => {
-    console.warn('[MongoDB] Connection initialization error:', err.message);
+    console.warn('[MongoDB] Connection initialization notice:', err.message);
     global._mongoClientPromise = undefined;
     global._mongoClientInstance = undefined;
     throw err;

@@ -20,6 +20,7 @@ import {
   serializeTinaTVShow,
   serializeTinaTVEpisode,
 } from '@/lib/tina/schema';
+import { STATIC_MOVIE_FILES, STATIC_TV_FILES } from '@/lib/staticContentRegistry';
 
 const VIDEO_DIR = path.join(process.cwd(), 'video');
 const TV_DIR = path.join(process.cwd(), 'tv');
@@ -72,9 +73,58 @@ export class LocalMarkdownProvider implements IContentProvider {
             }
           }
 
+          if (records.length === 0 && typeof STATIC_MOVIE_FILES === 'object') {
+            const seenSlugs = new Set<string>();
+            for (const [key, raw] of Object.entries(STATIC_MOVIE_FILES)) {
+              const normKey = key.replace(/\\/g, '/');
+              const file = path.basename(normKey);
+              const slug = file.replace(/\.(md|markdown)$/i, '');
+              if (seenSlugs.has(slug)) continue;
+              seenSlugs.add(slug);
+              try {
+                const { data, content } = matter(raw);
+                records.push({
+                  id: slug,
+                  slug,
+                  title: data.title || slug,
+                  relativePath: `video/${file}`,
+                  frontmatter: data,
+                  content,
+                  contentHtml: marked.parse(content || '') as string,
+                  updatedAt: Date.now(),
+                });
+              } catch {}
+            }
+          }
+
           return records;
         } catch (e) {
           console.error('[LocalMarkdownProvider] Error listing video files:', e);
+          if (typeof STATIC_MOVIE_FILES === 'object') {
+            const seenSlugs = new Set<string>();
+            const records: MovieRecord[] = [];
+            for (const [key, raw] of Object.entries(STATIC_MOVIE_FILES)) {
+              const normKey = key.replace(/\\/g, '/');
+              const file = path.basename(normKey);
+              const slug = file.replace(/\.(md|markdown)$/i, '');
+              if (seenSlugs.has(slug)) continue;
+              seenSlugs.add(slug);
+              try {
+                const { data, content } = matter(raw);
+                records.push({
+                  id: slug,
+                  slug,
+                  title: data.title || slug,
+                  relativePath: `video/${file}`,
+                  frontmatter: data,
+                  content,
+                  contentHtml: marked.parse(content || '') as string,
+                  updatedAt: Date.now(),
+                });
+              } catch {}
+            }
+            return records;
+          }
           return [];
         }
       },
@@ -240,9 +290,122 @@ export class LocalMarkdownProvider implements IContentProvider {
             }
           }
 
+          if (shows.length === 0 && typeof STATIC_TV_FILES === 'object') {
+            const showsMap = new Map<string, any>();
+            for (const [key, raw] of Object.entries(STATIC_TV_FILES)) {
+              const normKey = key.replace(/\\/g, '/');
+              const parts = normKey.split('/');
+              if (parts[0] !== 'tv' || parts.length < 2) continue;
+              const showSlug = parts[1];
+              if (!showsMap.has(showSlug)) {
+                showsMap.set(showSlug, {
+                  id: showSlug,
+                  showSlug,
+                  title: showSlug,
+                  relativePath: `tv/${showSlug}/_index.md`,
+                  frontmatter: {},
+                  content: '',
+                  contentHtml: '',
+                  episodes: [],
+                  updatedAt: Date.now(),
+                });
+              }
+              const show = showsMap.get(showSlug);
+              const lastPart = parts[parts.length - 1];
+              if (lastPart === '_index.md' || lastPart === 'index.md') {
+                try {
+                  const { data, content } = matter(raw);
+                  show.frontmatter = data || {};
+                  show.title = data?.title || showSlug;
+                  show.content = content || '';
+                  show.contentHtml = marked.parse(content || '') as string;
+                } catch {}
+              } else if (/\.(md|markdown)$/i.test(lastPart)) {
+                try {
+                  const { data, content } = matter(raw);
+                  const seasonFolder = parts.length > 3 ? parts[2] : 's1';
+                  const epSlug = lastPart.replace(/\.(md|markdown)$/i, '');
+                  const epNum = parseInt(epSlug.replace(/\D/g, '') || '1', 10);
+                  if (!show.episodes.some((e: any) => e.slug === epSlug && e.seasonFolder === seasonFolder)) {
+                    show.episodes.push({
+                      id: `${showSlug}-${seasonFolder}-${epSlug}`,
+                      showSlug,
+                      seasonFolder,
+                      episodeNumber: epNum,
+                      slug: epSlug,
+                      title: data?.title || `Episode ${epNum}`,
+                      relativePath: `tv/${showSlug}/${seasonFolder}/${lastPart}`,
+                      frontmatter: data || {},
+                      content: content || '',
+                      contentHtml: marked.parse(content || '') as string,
+                      updatedAt: Date.now(),
+                    });
+                  }
+                } catch {}
+              }
+            }
+            shows.push(...Array.from(showsMap.values()));
+          }
+
           return shows;
         } catch (e) {
           console.error('[LocalMarkdownProvider] Error scanning TV shows:', e);
+          if (typeof STATIC_TV_FILES === 'object') {
+            const showsMap = new Map<string, any>();
+            for (const [key, raw] of Object.entries(STATIC_TV_FILES)) {
+              const normKey = key.replace(/\\/g, '/');
+              const parts = normKey.split('/');
+              if (parts[0] !== 'tv' || parts.length < 2) continue;
+              const showSlug = parts[1];
+              if (!showsMap.has(showSlug)) {
+                showsMap.set(showSlug, {
+                  id: showSlug,
+                  showSlug,
+                  title: showSlug,
+                  relativePath: `tv/${showSlug}/_index.md`,
+                  frontmatter: {},
+                  content: '',
+                  contentHtml: '',
+                  episodes: [],
+                  updatedAt: Date.now(),
+                });
+              }
+              const show = showsMap.get(showSlug);
+              const lastPart = parts[parts.length - 1];
+              if (lastPart === '_index.md' || lastPart === 'index.md') {
+                try {
+                  const { data, content } = matter(raw);
+                  show.frontmatter = data || {};
+                  show.title = data?.title || showSlug;
+                  show.content = content || '';
+                  show.contentHtml = marked.parse(content || '') as string;
+                } catch {}
+              } else if (/\.(md|markdown)$/i.test(lastPart)) {
+                try {
+                  const { data, content } = matter(raw);
+                  const seasonFolder = parts.length > 3 ? parts[2] : 's1';
+                  const epSlug = lastPart.replace(/\.(md|markdown)$/i, '');
+                  const epNum = parseInt(epSlug.replace(/\D/g, '') || '1', 10);
+                  if (!show.episodes.some((e: any) => e.slug === epSlug && e.seasonFolder === seasonFolder)) {
+                    show.episodes.push({
+                      id: `${showSlug}-${seasonFolder}-${epSlug}`,
+                      showSlug,
+                      seasonFolder,
+                      episodeNumber: epNum,
+                      slug: epSlug,
+                      title: data?.title || `Episode ${epNum}`,
+                      relativePath: `tv/${showSlug}/${seasonFolder}/${lastPart}`,
+                      frontmatter: data || {},
+                      content: content || '',
+                      contentHtml: marked.parse(content || '') as string,
+                      updatedAt: Date.now(),
+                    });
+                  }
+                } catch {}
+              }
+            }
+            return Array.from(showsMap.values());
+          }
           return [];
         }
       },

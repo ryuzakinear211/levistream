@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { SlidersHorizontal, ChevronLeft, ChevronRight, Tv, Globe } from 'lucide-react';
+import { SlidersHorizontal, ChevronLeft, ChevronRight, Tv, Globe, MessageSquarePlus } from 'lucide-react';
 import { TVShow, Genre } from '@/types/tmdb';
 import { discoverTVShows, getTVGenres, getGenres, prefetchImages } from '@/lib/tmdb';
 import MovieCard, { MovieCardSkeleton } from '@/components/MovieCard';
@@ -186,13 +187,6 @@ export default function TVBrowseClient({
   };
 
   const handleGenreSelect = (gId: number) => {
-    const localMatches = initialShows.filter((s) => s.genre_ids && s.genre_ids.includes(gId));
-    if (localMatches.length === 0) {
-      setGenreId(undefined);
-      setPage(1);
-      updateUrl(1, sort, undefined, languageFilter);
-      return;
-    }
     setGenreId(gId);
     setPage(1);
     updateUrl(1, sort, gId, languageFilter);
@@ -377,37 +371,42 @@ export default function TVBrowseClient({
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 px-4 text-center bg-[#090e1f] rounded-2xl border border-white/5 max-w-2xl mx-auto my-8">
-            <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center text-slate-500 mb-4">
+            <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center text-pink-400 mb-4 shadow-lg shadow-pink-500/10">
               <Tv size={28} />
             </div>
             <h3 className="text-base sm:text-lg font-bold text-white mb-2">
-              Tidak Ada TV Series Ditemukan
+              Belum Ada Series {selectedGenreName ? `Genre ${selectedGenreName}` : ''}
             </h3>
-            <p className="text-xs sm:text-sm text-slate-400 mb-5 max-w-md">
-              Belum ada serial TV {languageFilter === 'en' ? 'Bahasa Inggris (EN)' : languageFilter === 'id' ? 'Bahasa Indonesia (ID)' : ''}{' '}
-              {selectedGenreName ? (
-                <>untuk genre <span className="text-white font-semibold">{selectedGenreName}</span></>
-              ) : null}{' '}
-              di database lokal.
+            <p className="text-xs sm:text-sm text-slate-400 mb-6 max-w-md">
+              {selectedGenreName
+                ? `Serial TV dengan genre "${selectedGenreName}" belum tersedia di katalog kami. Anda dapat me-request serial TV favorit Anda untuk ditambahkan segera.`
+                : `Tidak ada serial TV yang sesuai dengan filter yang dipilih.`}
             </p>
             <div className="flex items-center gap-3 flex-wrap justify-center">
-              {languageFilter !== 'all' && (
-                <button
-                  onClick={() => handleLanguageChange('all')}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 bg-pink-500 hover:bg-pink-400 text-white shadow-pink-500/20"
-                >
-                  <Globe size={14} />
-                  <span>Lihat Semua Bahasa (All)</span>
-                </button>
-              )}
               {genreId && (
                 <button
                   onClick={handleAllSelect}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white/10 hover:bg-white/20 text-white border border-white/10"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-90 text-white shadow-pink-500/20"
                 >
-                  <span>Lihat Semua Genre</span>
+                  <span>Lihat Semua Series</span>
                 </button>
               )}
+              {languageFilter !== 'all' && (
+                <button
+                  onClick={() => handleLanguageChange('all')}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-white/10 hover:bg-white/20 text-white border border-white/10"
+                >
+                  <Globe size={14} />
+                  <span>Semua Bahasa</span>
+                </button>
+              )}
+              <Link
+                href="/request"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-white/5 hover:bg-white/10 text-pink-300 border border-pink-500/30 hover:border-pink-500/50"
+              >
+                <MessageSquarePlus size={14} />
+                <span>Request Series Ini</span>
+              </Link>
             </div>
           </div>
         )}

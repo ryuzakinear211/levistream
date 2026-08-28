@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, SlidersHorizontal, Globe, Film, Tv } from 'lucide-react';
+import { ChevronLeft, ChevronRight, SlidersHorizontal, Globe, Film, Tv, MessageSquarePlus } from 'lucide-react';
 import { Movie, TVShow, Genre } from '@/types/tmdb';
 import MovieCard from '@/components/MovieCard';
 import GenreFilter from '@/components/GenreFilter';
@@ -143,20 +144,8 @@ export default function GenrePageClient({
     }
   };
 
-  // Instant client-side genre switching with empty genre auto-redirection
+  // Instant client-side genre switching
   const handleGenreSelect = (genreId: number) => {
-    const matching = allLocalItems.filter(
-      (item: any) => Array.isArray(item.genre_ids) && item.genre_ids.includes(genreId)
-    );
-
-    // Genre yang belum ada datanya diarahkan ke all genre secara instan
-    if (matching.length === 0) {
-      setActiveGenreId(null);
-      setPage(1);
-      updateUrl(null, languageFilter, sort);
-      return;
-    }
-
     setActiveGenreId(genreId);
     setPage(1);
     updateUrl(genreId, languageFilter, sort);
@@ -361,30 +350,53 @@ export default function GenrePageClient({
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 px-4 text-center bg-[#090e1f] rounded-2xl border border-white/5 max-w-2xl mx-auto my-8">
-            <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center text-slate-500 mb-4">
+            <div className={`w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center mb-4 shadow-lg ${
+              isTV ? 'text-pink-400 shadow-pink-500/10' : 'text-cyan-400 shadow-cyan-500/10'
+            }`}>
               {isTV ? <Tv size={28} /> : <Film size={28} />}
             </div>
             <h3 className="text-base sm:text-lg font-bold text-white mb-2">
-              Tidak Ada {isTV ? 'TV Series' : 'Film'} Ditemukan
+              Belum Ada {isTV ? 'TV Series' : 'Film'} {activeGenreId && currentGenre.name !== 'All' ? `Genre ${currentGenre.name}` : ''}
             </h3>
-            <p className="text-xs sm:text-sm text-slate-400 mb-5 max-w-md">
-              Belum ada {isTV ? 'serial TV' : 'film'}{' '}
-              {languageFilter === 'en' ? 'Bahasa Inggris (EN)' : languageFilter === 'id' ? 'Bahasa Indonesia (ID)' : ''}{' '}
-              untuk genre <span className="text-white font-semibold">{currentGenre.name}</span> di database lokal.
+            <p className="text-xs sm:text-sm text-slate-400 mb-6 max-w-md">
+              {activeGenreId && currentGenre.name !== 'All'
+                ? `${isTV ? 'Serial TV' : 'Film'} dengan genre "${currentGenre.name}" belum tersedia di katalog kami. Anda dapat me-request judul favorit Anda untuk ditambahkan segera.`
+                : `Tidak ada ${isTV ? 'serial TV' : 'film'} yang sesuai dengan filter yang dipilih.`}
             </p>
-            {languageFilter !== 'all' && (
-              <button
-                onClick={() => handleLanguageChange('all')}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 ${
+            <div className="flex items-center gap-3 flex-wrap justify-center">
+              {activeGenreId && (
+                <button
+                  onClick={handleAllSelect}
+                  className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 ${
+                    isTV
+                      ? 'bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-90 text-white shadow-pink-500/20'
+                      : 'bg-cyan-500 hover:bg-cyan-400 text-black shadow-cyan-500/20'
+                  }`}
+                >
+                  <span>Lihat Semua {isTV ? 'Series' : 'Film'}</span>
+                </button>
+              )}
+              {languageFilter !== 'all' && (
+                <button
+                  onClick={() => handleLanguageChange('all')}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-white/10 hover:bg-white/20 text-white border border-white/10"
+                >
+                  <Globe size={14} />
+                  <span>Semua Bahasa</span>
+                </button>
+              )}
+              <Link
+                href="/request"
+                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all bg-white/5 hover:bg-white/10 border ${
                   isTV
-                    ? 'bg-pink-500 hover:bg-pink-400 text-white shadow-pink-500/20'
-                    : 'bg-cyan-500 hover:bg-cyan-400 text-black shadow-cyan-500/20'
+                    ? 'text-pink-300 border-pink-500/30 hover:border-pink-500/50'
+                    : 'text-cyan-300 border-cyan-500/30 hover:border-cyan-500/50'
                 }`}
               >
-                <Globe size={14} />
-                <span>Lihat Semua Bahasa (All)</span>
-              </button>
-            )}
+                <MessageSquarePlus size={14} />
+                <span>Request {isTV ? 'Series' : 'Film'} Ini</span>
+              </Link>
+            </div>
           </div>
         )}
 

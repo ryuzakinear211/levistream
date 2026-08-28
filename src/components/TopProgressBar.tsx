@@ -1,22 +1,24 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import React, { useEffect, useState, useRef, Suspense } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 
-export default function TopProgressBar() {
+function TopProgressBarContent() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Complete and hide progress bar on path or query param changes
   useEffect(() => {
-    // When path changes, complete and fade out progress bar
     setProgress(100);
     const timer = setTimeout(() => {
       setLoading(false);
       setProgress(0);
-    }, 300);
+    }, 250);
     return () => clearTimeout(timer);
-  }, [pathname]);
+  }, [pathname, searchParams]);
 
   // Intercept anchor clicks to start progress bar instantly
   useEffect(() => {
@@ -33,16 +35,33 @@ export default function TopProgressBar() {
         !e.shiftKey
       ) {
         const url = new URL(target.href);
-        if (url.pathname !== window.location.pathname || url.search !== window.location.search) {
-          setLoading(true);
-          setProgress(25);
-          setTimeout(() => setProgress(65), 150);
-        }
+        const isCurrent =
+          url.pathname === window.location.pathname && url.search === window.location.search;
+
+        if (isCurrent) return;
+
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+        setLoading(true);
+        setProgress(30);
+        setTimeout(() => setProgress(70), 100);
+
+        // Auto-complete safety timeout (prevents hanging progress bar on client-filtered state changes)
+        timeoutRef.current = setTimeout(() => {
+          setProgress(100);
+          setTimeout(() => {
+            setLoading(false);
+            setProgress(0);
+          }, 200);
+        }, 500);
       }
     };
 
     document.addEventListener('click', handleAnchorClick, { capture: true });
-    return () => document.removeEventListener('click', handleAnchorClick, { capture: true });
+    return () => {
+      document.removeEventListener('click', handleAnchorClick, { capture: true });
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
   }, []);
 
   if (!loading && progress === 0) return null;
@@ -59,3 +78,12 @@ export default function TopProgressBar() {
     />
   );
 }
+
+export default function TopProgressBar() {
+  return (
+    <Suspense fallback={null}>
+      <TopProgressBarContent />
+    </Suspense>
+  );
+}
+
