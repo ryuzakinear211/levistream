@@ -882,9 +882,7 @@ export async function getAllFeaturedCustomTV(): Promise<FeaturedItem[]> {
               } catch {}
             }
 
-            const firstEp = s.episodes?.[0];
-            const epSlug = firstEp ? (firstEp.slug || (firstEp.seasonFolder ? `${firstEp.seasonFolder}/${firstEp.episode}` : firstEp.episode)) : null;
-            const link = epSlug ? `/tv/${s.showSlug}/${epSlug}` : `/tv/${s.showSlug}`;
+            const link = `/tv/${s.showSlug}`;
 
             return {
               id: `tv-${s.showSlug}`,
@@ -902,6 +900,8 @@ export async function getAllFeaturedCustomTV(): Promise<FeaturedItem[]> {
               link,
               badge: 'Featured',
               featured: true,
+              trending: Boolean(s.trending),
+              language: s.language ? String(s.language).trim().toUpperCase() : 'ID',
               isCustom: true,
             } as FeaturedItem;
           })
@@ -924,54 +924,66 @@ export async function getAllCustomTVShowsForList(): Promise<any[]> {
     'custom_tv_shows_for_list',
     async () => {
       try {
-        let mongoShows: any[] = [];
-        if (isMongoConfigured()) {
-          mongoShows = await getMongoTVShows().catch(() => []);
-        } else {
-          ensureTVDirExists();
-          const showDirs = fs.existsSync(TV_CONTENT_DIR)
-            ? fs.readdirSync(TV_CONTENT_DIR, { withFileTypes: true })
-                .filter((d) => d.isDirectory())
-                .map((d) => d.name)
-            : [];
+        const mergedShowsMap = new Map<string, any>();
 
-          mongoShows = showDirs
-            .map((showDir) => {
-              try {
-                const showPath = path.join(TV_CONTENT_DIR, showDir);
-                const indexPath = fs.existsSync(path.join(showPath, '_index.md'))
-                  ? path.join(showPath, '_index.md')
-                  : fs.existsSync(path.join(showPath, 'index.md'))
-                  ? path.join(showPath, 'index.md')
-                  : null;
-                if (indexPath) {
-                  const raw = fs.readFileSync(indexPath, 'utf8');
-                  const { data } = matter(raw);
-                  return {
-                    showSlug: showDir,
-                    tmdb_id: Number(data.tmdb_id) || 0,
-                    title: data.title || showDir,
-                    image_url: data.image_url || data.poster_path || '',
-                    deskripsi: data.deskripsi || data.overview || '',
-                    rating: Number(data.rating) || 0,
-                    featured: Boolean(data.featured),
-                    episodes: [],
-                    createdAt: 0,
-                    updatedAt: 0,
-                  };
-                }
-              } catch {}
-              return null;
-            })
-            .filter(Boolean) as any[];
+        if (isMongoConfigured()) {
+          const mongoShows = await getMongoTVShows().catch(() => []);
+          for (const s of mongoShows) {
+            if (s && s.showSlug) {
+              mergedShowsMap.set(s.showSlug, s);
+            }
+          }
         }
 
+        ensureTVDirExists();
+        const showDirs = fs.existsSync(TV_CONTENT_DIR)
+          ? fs.readdirSync(TV_CONTENT_DIR, { withFileTypes: true })
+              .filter((d) => d.isDirectory())
+              .map((d) => d.name)
+          : [];
+
+        for (const showDir of showDirs) {
+          if (!mergedShowsMap.has(showDir)) {
+            try {
+              const showPath = path.join(TV_CONTENT_DIR, showDir);
+              const indexPath = fs.existsSync(path.join(showPath, '_index.md'))
+                ? path.join(showPath, '_index.md')
+                : fs.existsSync(path.join(showPath, 'index.md'))
+                ? path.join(showPath, 'index.md')
+                : null;
+              if (indexPath) {
+                const raw = fs.readFileSync(indexPath, 'utf8');
+                const { data } = matter(raw);
+                mergedShowsMap.set(showDir, {
+                  showSlug: showDir,
+                  tmdb_id: Number(data.tmdb_id) || 0,
+                  title: data.title || showDir,
+                  image_url: data.image_url || data.poster_path || '',
+                  deskripsi: data.deskripsi || data.overview || '',
+                  rating: Number(data.rating) || 0,
+                  featured: Boolean(data.featured),
+                  trending: Boolean(data.trending),
+                  language: data.language ? String(data.language).trim().toUpperCase() : 'ID',
+                  weight: data.weight !== undefined && data.weight !== null && data.weight !== '' ? Number(data.weight) : undefined,
+                  episodes: [],
+                  createdAt: 0,
+                  updatedAt: 0,
+                });
+              }
+            } catch {}
+          }
+        }
+
+        const showDocs = Array.from(mergedShowsMap.values());
+
         return await Promise.all(
-          mongoShows.map(async (s) => {
+          showDocs.map(async (s) => {
             let poster: string | null = null;
             let backdrop: string | null = null;
             let rating = s.rating || 0;
             let overview = s.deskripsi || '';
+            let genreIds: number[] = [];
+            let firstAirDate = '2026-01-01';
 
             if (s.tmdb_id) {
               try {
@@ -981,6 +993,12 @@ export async function getAllCustomTVShowsForList(): Promise<any[]> {
                   backdrop = tmdb.backdrop_path || null;
                   if (!overview && tmdb.overview) overview = tmdb.overview;
                   if (!rating && tmdb.vote_average) rating = Math.round(tmdb.vote_average * 10) / 10;
+                  if (tmdb.first_air_date) firstAirDate = tmdb.first_air_date;
+                  if (Array.isArray(tmdb.genres)) {
+                    genreIds = tmdb.genres.map((g: any) => g.id);
+                  } else if (Array.isArray((tmdb as any).genre_ids)) {
+                    genreIds = (tmdb as any).genre_ids;
+                  }
                 }
               } catch {}
             }
@@ -988,17 +1006,24 @@ export async function getAllCustomTVShowsForList(): Promise<any[]> {
             return {
               id: s.tmdb_id || s.showSlug,
               name: s.title || s.showSlug,
+              title: s.title || s.showSlug,
               overview,
               poster_path: poster,
               backdrop_path: backdrop,
-              first_air_date: '2026-01-01',
+              first_air_date: firstAirDate,
               vote_average: rating,
               vote_count: 0,
-              genre_ids: [],
+              genre_ids: genreIds,
               popularity: 100,
               isCustomTV: true,
+              media_type: 'tv',
               customSlug: s.showSlug,
               customImageUrl: s.image_url || null,
+              featured: Boolean(s.featured),
+              trending: Boolean(s.trending),
+              language: s.language ? String(s.language).trim().toUpperCase() : 'ID',
+              weight: s.weight !== undefined && s.weight !== null ? Number(s.weight) : undefined,
+              link: `/tv/${s.showSlug}`,
             };
           })
         );

@@ -666,42 +666,54 @@ export async function getAllCustomMoviesForList(): Promise<any[]> {
     'custom_movies_for_list',
     async () => {
       try {
-        let mongoMovies: any[] = [];
+        const mergedMoviesMap = new Map<string, any>();
+
         if (isMongoConfigured()) {
-          mongoMovies = await getMongoMovies().catch(() => []);
-        } else {
-          ensureContentDirExists();
-          const files = getAllCustomMovieFiles();
-          mongoMovies = files
-            .map((file) => {
-              try {
-                const raw = fs.readFileSync(path.join(CONTENT_DIR, file), 'utf8');
-                const { data } = matter(raw);
-                return {
-                  slug: file.replace(/\.(md|markdown)$/i, ''),
-                  tmdb_id: Number(data.tmdb_id) || 0,
-                  title: data.title || file.replace(/\.(md|markdown)$/i, ''),
-                  videourl: cleanVideoUrl(data.videourl || data.video_url || '') || '',
-                  image_url: data.image_url || data.poster_path || '',
-                  deskripsi: data.deskripsi || data.overview || '',
-                  rating: Number(data.rating) || 0,
-                  featured: Boolean(data.featured),
-                  createdAt: 0,
-                  updatedAt: 0,
-                };
-              } catch {
-                return null;
-              }
-            })
-            .filter(Boolean) as any[];
+          const mongoMovies = await getMongoMovies().catch(() => []);
+          for (const m of mongoMovies) {
+            if (m && m.slug) {
+              mergedMoviesMap.set(m.slug, m);
+            }
+          }
         }
 
+        ensureContentDirExists();
+        const files = getAllCustomMovieFiles();
+        for (const file of files) {
+          const slug = file.replace(/\.(md|markdown)$/i, '');
+          if (!mergedMoviesMap.has(slug)) {
+            try {
+              const raw = fs.readFileSync(path.join(CONTENT_DIR, file), 'utf8');
+              const { data } = matter(raw);
+              mergedMoviesMap.set(slug, {
+                slug,
+                tmdb_id: Number(data.tmdb_id) || 0,
+                title: data.title || slug,
+                videourl: cleanVideoUrl(data.videourl || data.video_url || '') || '',
+                image_url: data.image_url || data.poster_path || '',
+                deskripsi: data.deskripsi || data.overview || '',
+                rating: Number(data.rating) || 0,
+                featured: Boolean(data.featured),
+                trending: Boolean(data.trending),
+                language: data.language ? String(data.language).trim().toUpperCase() : 'ID',
+                weight: data.weight !== undefined && data.weight !== null && data.weight !== '' ? Number(data.weight) : undefined,
+                createdAt: 0,
+                updatedAt: 0,
+              });
+            } catch {}
+          }
+        }
+
+        const movieDocs = Array.from(mergedMoviesMap.values());
+
         return await Promise.all(
-          mongoMovies.map(async (m) => {
+          movieDocs.map(async (m) => {
             let poster: string | null = null;
             let backdrop: string | null = null;
             let rating = m.rating || 0;
             let overview = m.deskripsi || '';
+            let genreIds: number[] = [];
+            let releaseDate = '2026-01-01';
 
             if (m.tmdb_id) {
               try {
@@ -711,6 +723,12 @@ export async function getAllCustomMoviesForList(): Promise<any[]> {
                   backdrop = tmdb.backdrop_path || null;
                   if (!overview && tmdb.overview) overview = tmdb.overview;
                   if (!rating && tmdb.vote_average) rating = Math.round(tmdb.vote_average * 10) / 10;
+                  if (tmdb.release_date) releaseDate = tmdb.release_date;
+                  if (Array.isArray(tmdb.genres)) {
+                    genreIds = tmdb.genres.map((g: any) => g.id);
+                  } else if (Array.isArray((tmdb as any).genre_ids)) {
+                    genreIds = (tmdb as any).genre_ids;
+                  }
                 }
               } catch {}
             }
@@ -721,17 +739,22 @@ export async function getAllCustomMoviesForList(): Promise<any[]> {
               overview,
               poster_path: poster,
               backdrop_path: backdrop,
-              release_date: '2026-01-01',
+              release_date: releaseDate,
               vote_average: rating,
               vote_count: 0,
-              genre_ids: [],
+              genre_ids: genreIds,
               popularity: 100,
               adult: false,
               video: false,
               isCustomMarkdown: true,
+              media_type: 'movie',
               customSlug: m.slug,
               customVideoUrl: m.videourl,
               customImageUrl: m.image_url || null,
+              featured: Boolean(m.featured),
+              trending: Boolean(m.trending),
+              language: m.language ? String(m.language).trim().toUpperCase() : 'ID',
+              weight: m.weight !== undefined && m.weight !== null ? Number(m.weight) : undefined,
             };
           })
         );

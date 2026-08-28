@@ -2,7 +2,7 @@ import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Metadata } from 'next';
-import { Calendar, Clock, Sparkles, Users, Folder, ChevronLeft } from 'lucide-react';
+import { Calendar, Clock, Sparkles, Users, Folder, ChevronLeft, AlertTriangle } from 'lucide-react';
 import { getImageUrl } from '@/lib/tmdb';
 import {
   getTVShowDetailsWithCustomOverride,
@@ -14,6 +14,7 @@ import RatingBadge from '@/components/RatingBadge';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
 import TVDetailClient, { TVDetailHeaderActions } from '@/components/TVDetailClient';
 import TVEpisodeList from '@/components/TVEpisodeList';
+import NonLocalWarning from '@/components/NonLocalWarning';
 import siteConfig from '@/config';
 
 export const dynamicParams = true;
@@ -411,7 +412,7 @@ export default async function TVShowPage({ params }: PageProps) {
                       {data.genres.map((genre) => (
                         <Link
                           key={genre.id}
-                          href={`/genre/${genre.id}`}
+                          href={`/genre/${genre.id}?type=tv`}
                           className="px-3 py-1 rounded-full text-xs font-semibold transition-all duration-200 hover:scale-105"
                           style={{
                             background: 'rgba(124,58,237,0.15)',
@@ -445,6 +446,13 @@ export default async function TVShowPage({ params }: PageProps) {
                       releaseDate={data.first_air_date}
                     />
                   </div>
+
+                  {/* Non-local Warning Notice */}
+                  {!data.isCustomTV && (
+                    <div className="mt-5 max-w-xl">
+                      <NonLocalWarning type="tv" />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

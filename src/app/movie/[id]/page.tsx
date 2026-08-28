@@ -2,7 +2,7 @@ import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Metadata } from 'next';
-import { Calendar, Clock, Globe, Clapperboard, Users, ChevronLeft, Sparkles } from 'lucide-react';
+import { Calendar, Clock, Globe, Clapperboard, Users, ChevronLeft, Sparkles, AlertTriangle } from 'lucide-react';
 import { getImageUrl } from '@/lib/tmdb';
 import {
   getMovieDetailsWithCustomOverride,
@@ -14,6 +14,7 @@ import RatingBadge from '@/components/RatingBadge';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
 import MovieDetailClient from '@/components/MovieDetailClient';
 import VideoPlayer from '@/components/VideoPlayer';
+import NonLocalWarning from '@/components/NonLocalWarning';
 import siteConfig from '@/config';
 
 export const dynamicParams = true;
@@ -258,6 +259,28 @@ export default async function MovieDetailPage({ params }: PageProps) {
         </>
       )}
 
+      {/* OpenGraph Video & Schema.org VideoObject */}
+      {videoUrl && (
+        <>
+          <meta property="og:site_name" content={siteConfig.name} />
+          <meta name="application-name" content={siteConfig.name} />
+          <meta name="apple-mobile-web-app-title" content={siteConfig.name} />
+          <link rel="video_src" href={embedUrl} />
+          <meta property="og:video" content={embedUrl} />
+          <meta property="og:video:url" content={embedUrl} />
+          <meta property="og:video:secure_url" content={embedUrl} />
+          <meta property="og:video:type" content="text/html" />
+          <meta property="og:video:width" content="1920" />
+          <meta property="og:video:height" content="1080" />
+          {videoObjectSchema && (
+            <script
+              type="application/ld+json"
+              dangerouslySetInnerHTML={{ __html: JSON.stringify(videoObjectSchema, null, 2) }}
+            />
+          )}
+        </>
+      )}
+
       {/* ── 1. CUSTOM VIDEO PLAYER (IF CUSTOM CONTENT) OR CINEMATIC POSTER HERO BANNER ── */}
       {videoUrl ? (
         <>
@@ -472,6 +495,13 @@ export default async function MovieDetailPage({ params }: PageProps) {
                     releaseDate={movie.release_date}
                   />
                 </div>
+
+                {/* Non-local Warning Notice */}
+                {!movie.isCustomMarkdown && (
+                  <div className="mt-5 max-w-xl">
+                    <NonLocalWarning type="movie" />
+                  </div>
+                )}
               </div>
             </div>
           </div>

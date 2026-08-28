@@ -60,6 +60,7 @@ export async function GET(request: NextRequest) {
         numberOfSeasons: show.number_of_seasons || 1,
         numberOfEpisodes: show.number_of_episodes || 1,
         genres: show.genres?.map((g) => g.name) || [],
+        originalLanguage: show.original_language || null,
         backdrops,
         posters,
       });
@@ -78,6 +79,7 @@ export async function GET(request: NextRequest) {
         rating: movie.vote_average ? Math.round(movie.vote_average * 10) / 10 : null,
         runtime: movie.runtime ? `${Math.floor(movie.runtime / 60)}h ${movie.runtime % 60}m` : null,
         genres: movie.genres?.map((g) => g.name) || [],
+        originalLanguage: movie.original_language || null,
         backdrops,
         posters,
       });

@@ -120,22 +120,24 @@ export function useAdminData() {
         setPageLoading(true);
       }
 
-      // Check client cache for instant render
+      // Check client cache for instant render only if it contains complete data
       if (adminClientCache.has(cacheKey) && !options.force) {
         const cached = adminClientCache.get(cacheKey);
-        setMovies(cached.movies || []);
-        setTvShows(cached.tvShows || []);
-        setTotalMovies(cached.totalMovies || 0);
-        setTotalTvShows(cached.totalTvShows || 0);
-        setTotalMoviePages(cached.totalMoviePages || 1);
-        setTotalTvPages(cached.totalTvPages || 1);
-        setTotalAllMoviesCount(cached.totalAllMoviesCount !== undefined ? cached.totalAllMoviesCount : (cached.totalMovies || 0));
-        setTotalAllTvShowsCount(cached.totalAllTvShowsCount !== undefined ? cached.totalAllTvShowsCount : (cached.totalTvShows || 0));
-        setTotalEpisodesCount(cached.totalEpisodesCount || 0);
-        setLoading(false);
-        setPageLoading(false);
-        setIsInitialLoad(false);
-        return;
+        if (cached && Array.isArray(cached.movies) && Array.isArray(cached.tvShows)) {
+          setMovies(cached.movies);
+          setTvShows(cached.tvShows);
+          setTotalMovies(cached.totalMovies || 0);
+          setTotalTvShows(cached.totalTvShows || 0);
+          setTotalMoviePages(cached.totalMoviePages || 1);
+          setTotalTvPages(cached.totalTvPages || 1);
+          setTotalAllMoviesCount(cached.totalAllMoviesCount !== undefined ? cached.totalAllMoviesCount : (cached.totalMovies || 0));
+          setTotalAllTvShowsCount(cached.totalAllTvShowsCount !== undefined ? cached.totalAllTvShowsCount : (cached.totalTvShows || 0));
+          setTotalEpisodesCount(cached.totalEpisodesCount || 0);
+          setLoading(false);
+          setPageLoading(false);
+          setIsInitialLoad(false);
+          return;
+        }
       }
 
       if (!options.silent) {
@@ -145,7 +147,6 @@ export function useAdminData() {
 
       try {
         const queryParams = new URLSearchParams({
-          tab: activeTab,
           moviePage: String(mPage),
           tvPage: String(tPage),
           search: debouncedSearch,
@@ -159,18 +160,20 @@ export function useAdminData() {
 
         if (res.ok) {
           const data = await res.json();
-          adminClientCache.set(cacheKey, data);
-          setMovies(data.movies || []);
-          setTvShows(data.tvShows || []);
-          setTotalMovies(data.totalMovies || 0);
-          setTotalTvShows(data.totalTvShows || 0);
-          setTotalMoviePages(data.totalMoviePages || 1);
-          setTotalTvPages(data.totalTvPages || 1);
-          setTotalAllMoviesCount(data.totalAllMoviesCount !== undefined ? data.totalAllMoviesCount : (data.totalMovies || 0));
-          setTotalAllTvShowsCount(data.totalAllTvShowsCount !== undefined ? data.totalAllTvShowsCount : (data.totalTvShows || 0));
-          setTotalEpisodesCount(data.totalEpisodesCount || 0);
-          if (options.force) {
-            showToast('Data berhasil diperbarui!');
+          if (data && Array.isArray(data.movies) && Array.isArray(data.tvShows)) {
+            adminClientCache.set(cacheKey, data);
+            setMovies(data.movies);
+            setTvShows(data.tvShows);
+            setTotalMovies(data.totalMovies || 0);
+            setTotalTvShows(data.totalTvShows || 0);
+            setTotalMoviePages(data.totalMoviePages || 1);
+            setTotalTvPages(data.totalTvPages || 1);
+            setTotalAllMoviesCount(data.totalAllMoviesCount !== undefined ? data.totalAllMoviesCount : (data.totalMovies || 0));
+            setTotalAllTvShowsCount(data.totalAllTvShowsCount !== undefined ? data.totalAllTvShowsCount : (data.totalTvShows || 0));
+            setTotalEpisodesCount(data.totalEpisodesCount || 0);
+            if (options.force) {
+              showToast('Data berhasil diperbarui!');
+            }
           }
         } else {
           showToast('Gagal memuat konten admin', 'error');
@@ -183,7 +186,7 @@ export function useAdminData() {
         setIsInitialLoad(false);
       }
     },
-    [getHeaders, activeTab, moviePage, tvPage, debouncedSearch, isInitialLoad, showToast]
+    [getHeaders, moviePage, tvPage, debouncedSearch, isInitialLoad, showToast]
   );
 
   const handleMoviePageChange = useCallback(
@@ -226,16 +229,84 @@ export function useAdminData() {
     fetchContent();
   }, [fetchContent]);
 
+  // Filter & Sort state
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'rating' | 'title' | 'weight'>('newest');
+  const [filterLanguage, setFilterLanguage] = useState<'all' | 'ID' | 'KR' | 'EN' | 'JP' | 'TH' | 'CN'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'trending' | 'featured'>('all');
+
   // Handle instant, non-blocking tab switch
   const handleTabSwitch = useCallback((tab: 'movies' | 'tv') => {
     setActiveTab(tab);
   }, []);
 
-  // For backward compatibility and simplicity in components
-  const paginatedMovies = movies;
-  const paginatedTvShows = tvShows;
-  const filteredMovies = movies;
-  const filteredTvShows = tvShows;
+  const processedMovies = useMemo(() => {
+    let list = [...movies];
+    // 1. Filter by language
+    if (filterLanguage !== 'all') {
+      list = list.filter((m) => (m.frontmatter?.language || 'ID').toUpperCase() === filterLanguage);
+    }
+    // 2. Filter by status
+    if (filterStatus === 'trending') {
+      list = list.filter((m) => Boolean(m.frontmatter?.trending));
+    } else if (filterStatus === 'featured') {
+      list = list.filter((m) => Boolean(m.frontmatter?.featured));
+    }
+    // 3. Sort
+    if (sortOrder === 'oldest') {
+      list.sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
+    } else if (sortOrder === 'rating') {
+      list.sort((a, b) => Number(b.frontmatter?.rating || b.rating || 0) - Number(a.frontmatter?.rating || a.rating || 0));
+    } else if (sortOrder === 'title') {
+      list.sort((a, b) => (a.displayTitle || a.frontmatter?.title || '').localeCompare(b.displayTitle || b.frontmatter?.title || ''));
+    } else if (sortOrder === 'weight') {
+      list.sort((a, b) => {
+        const wA = a.frontmatter?.weight !== undefined ? Number(a.frontmatter.weight) : 999999;
+        const wB = b.frontmatter?.weight !== undefined ? Number(b.frontmatter.weight) : 999999;
+        return wA - wB;
+      });
+    } else {
+      // newest
+      list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    }
+    return list;
+  }, [movies, filterLanguage, filterStatus, sortOrder]);
+
+  const processedTvShows = useMemo(() => {
+    let list = [...tvShows];
+    // 1. Filter by language
+    if (filterLanguage !== 'all') {
+      list = list.filter((s) => (s.frontmatter?.language || 'ID').toUpperCase() === filterLanguage);
+    }
+    // 2. Filter by status
+    if (filterStatus === 'trending') {
+      list = list.filter((s) => Boolean(s.frontmatter?.trending));
+    } else if (filterStatus === 'featured') {
+      list = list.filter((s) => Boolean(s.frontmatter?.featured));
+    }
+    // 3. Sort
+    if (sortOrder === 'oldest') {
+      list.sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
+    } else if (sortOrder === 'rating') {
+      list.sort((a, b) => Number(b.frontmatter?.rating || b.rating || 0) - Number(a.frontmatter?.rating || a.rating || 0));
+    } else if (sortOrder === 'title') {
+      list.sort((a, b) => (a.displayTitle || a.frontmatter?.title || '').localeCompare(b.displayTitle || b.frontmatter?.title || ''));
+    } else if (sortOrder === 'weight') {
+      list.sort((a, b) => {
+        const wA = a.frontmatter?.weight !== undefined ? Number(a.frontmatter.weight) : 999999;
+        const wB = b.frontmatter?.weight !== undefined ? Number(b.frontmatter.weight) : 999999;
+        return wA - wB;
+      });
+    } else {
+      // newest
+      list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    }
+    return list;
+  }, [tvShows, filterLanguage, filterStatus, sortOrder]);
+
+  const paginatedMovies = processedMovies;
+  const paginatedTvShows = processedTvShows;
+  const filteredMovies = processedMovies;
+  const filteredTvShows = processedTvShows;
 
   // CRUD Handlers
   const handleCreateSubmit = async (payload: any) => {
@@ -298,23 +369,23 @@ export function useAdminData() {
       });
 
       const result = await res.json();
-      if (res.ok) {
-        showToast(isBatch ? `${count} konten berhasil dihapus!` : 'Konten berhasil dihapus!');
-        if (isBatch) setSelectedBatchPaths([]);
-        adminClientCache.clear();
-        fetchContent({ silent: true, force: true });
-      } else {
+      if (!res.ok) {
         if (result.requiresToken) setIsSettingsOpen(true);
-        showToast(result.error || 'Gagal menghapus konten', 'error');
+        throw new Error(result.error || 'Gagal menghapus konten');
       }
-    } catch {
-      showToast('Gagal menghapus konten', 'error');
+
+      showToast(isBatch ? `${count} konten berhasil dihapus!` : 'Konten berhasil dihapus!');
+      setSelectedBatchPaths([]);
+      adminClientCache.clear();
+      fetchContent({ silent: true, force: true });
+    } catch (err: any) {
+      showToast(err.message || 'Gagal menghapus', 'error');
     }
   };
 
+  // Background GitHub Sync Polling & Manual Sync
   const [syncingGitHub, setSyncingGitHub] = useState(false);
 
-  // Check sync status on server and poll if in progress
   const pollSyncStatus = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/github-sync', { cache: 'no-store' });
@@ -381,6 +452,14 @@ export function useAdminData() {
     );
   };
 
+  const selectAll = (paths: string[]) => {
+    setSelectedBatchPaths(paths);
+  };
+
+  const clearSelection = () => {
+    setSelectedBatchPaths([]);
+  };
+
   return {
     movies,
     tvShows,
@@ -390,6 +469,12 @@ export function useAdminData() {
     setActiveTab,
     searchQuery,
     setSearchQuery,
+    sortOrder,
+    setSortOrder,
+    filterLanguage,
+    setFilterLanguage,
+    filterStatus,
+    setFilterStatus,
     filteredMovies,
     filteredTvShows,
     paginatedMovies,
@@ -420,6 +505,8 @@ export function useAdminData() {
     selectedBatchPaths,
     setSelectedBatchPaths,
     toggleBatchSelect,
+    selectAll,
+    clearSelection,
     ghToken,
     setGhToken,
     ghOwner,

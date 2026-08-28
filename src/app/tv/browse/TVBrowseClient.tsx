@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { SlidersHorizontal, ChevronLeft, ChevronRight, Tv } from 'lucide-react';
+import { SlidersHorizontal, ChevronLeft, ChevronRight, Tv, Globe } from 'lucide-react';
 import { TVShow, Genre } from '@/types/tmdb';
 import { discoverTVShows, getTVGenres, getGenres, prefetchImages } from '@/lib/tmdb';
 import MovieCard, { MovieCardSkeleton } from '@/components/MovieCard';
@@ -27,6 +27,29 @@ const SORT_OPTIONS = [
   { value: 'first_air_date.asc', label: 'Oldest First' },
 ];
 
+function sortLocalTVShows(items: TVShow[], sortOption: string): TVShow[] {
+  const copy = [...items];
+  if (sortOption === 'vote_average.desc') {
+    return copy.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
+  }
+  if (sortOption === 'first_air_date.desc') {
+    return copy.sort((a, b) => new Date(b.first_air_date || 0).getTime() - new Date(a.first_air_date || 0).getTime());
+  }
+  if (sortOption === 'first_air_date.asc') {
+    return copy.sort((a, b) => new Date(a.first_air_date || 0).getTime() - new Date(b.first_air_date || 0).getTime());
+  }
+  if (sortOption === 'popularity.desc') {
+    return copy.sort((a, b) => (b.popularity || 100) - (a.popularity || 100));
+  }
+  return copy;
+}
+
+function filterByLanguage(items: TVShow[], lang: 'all' | 'en' | 'id'): TVShow[] {
+  if (lang === 'en') return items.filter((s: any) => (s.language || 'ID').toUpperCase() === 'EN');
+  if (lang === 'id') return items.filter((s: any) => (s.language || 'ID').toUpperCase() === 'ID');
+  return items;
+}
+
 export default function TVBrowseClient({
   initialShows = [],
   totalPages: initialTotalPages = 1,
@@ -40,13 +63,18 @@ export default function TVBrowseClient({
   const searchParams = useSearchParams();
 
   const [genres, setGenres] = useState<Genre[]>(propGenres);
-  const [shows, setShows] = useState<TVShow[]>(initialShows);
+  const [languageFilter, setLanguageFilter] = useState<'all' | 'en' | 'id'>('all');
   const [page, setPage] = useState(initialPage);
   const [sort, setSort] = useState(initialSort);
   const [genreId, setGenreId] = useState<number | undefined>(initialGenreId);
-  const [totalPages, setTotalPages] = useState(Math.min(initialTotalPages, 500));
-  const [totalResults, setTotalResults] = useState(initialTotalResults);
-  const [loading, setLoading] = useState(initialShows.length === 0);
+  const [shows, setShows] = useState<TVShow[]>(() => {
+    if (initialShows.length === 0) return [];
+    const filtered = filterByLanguage(initialShows, 'all');
+    return sortLocalTVShows(filtered, initialSort);
+  });
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalResults, setTotalResults] = useState(0);
+  const [loading, setLoading] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
 
   const sortRef = useRef<HTMLDivElement>(null);
@@ -77,14 +105,33 @@ export default function TVBrowseClient({
     const p = Number(searchParams.get('page')) || 1;
     const s = searchParams.get('sort') || 'popularity.desc';
     const g = searchParams.get('genre') ? Number(searchParams.get('genre')) : undefined;
+    const l = (searchParams.get('lang') as 'all' | 'en' | 'id') || 'all';
 
     setPage(p);
     setSort(s);
     setGenreId(g);
+    if (l === 'en' || l === 'id' || l === 'all') {
+      setLanguageFilter(l);
+    }
   }, [searchParams]);
 
-  // Fetch TV shows when filter/sort/page change
+  // Fetch or filter TV shows when filter/sort/page/language change
   useEffect(() => {
+    // 1. If local TV shows exist:
+    if (initialShows.length > 0) {
+      let filtered = filterByLanguage(initialShows, languageFilter);
+      if (genreId) {
+        filtered = filtered.filter((s) => s.genre_ids && s.genre_ids.includes(genreId));
+      }
+      const sorted = sortLocalTVShows(filtered, sort);
+      const start = (page - 1) * 20;
+      setShows(sorted.slice(start, start + 20));
+      setTotalPages(Math.max(1, Math.ceil(sorted.length / 20)));
+      setTotalResults(sorted.length);
+      setLoading(false);
+      return;
+    }
+
     const cacheKey = `${page}_${sort}_${genreId || 'all'}`;
     if (tvClientCache.has(cacheKey)) {
       const cached = tvClientCache.get(cacheKey);
@@ -92,20 +139,6 @@ export default function TVBrowseClient({
       setTotalPages(Math.min(cached.total_pages, 500));
       setTotalResults(cached.total_results);
       setLoading(false);
-
-      // Background prefetch next page
-      const nextPage = page + 1;
-      if (nextPage <= Math.min(cached.total_pages, 500)) {
-        const nextKey = `${nextPage}_${sort}_${genreId || 'all'}`;
-        if (!tvClientCache.has(nextKey)) {
-          discoverTVShows(nextPage, sort, genreId)
-            .then((nextData) => {
-              tvClientCache.set(nextKey, nextData);
-              prefetchImages(nextData.results);
-            })
-            .catch(() => {});
-        }
-      }
       return;
     }
 
@@ -118,55 +151,70 @@ export default function TVBrowseClient({
         setTotalPages(maxPages);
         setTotalResults(data.total_results);
         prefetchImages(data.results);
-
-        // Background prefetch next page for instant next-page clicks
-        const nextPage = page + 1;
-        if (nextPage <= maxPages) {
-          const nextKey = `${nextPage}_${sort}_${genreId || 'all'}`;
-          if (!tvClientCache.has(nextKey)) {
-            discoverTVShows(nextPage, sort, genreId)
-              .then((nextData) => {
-                tvClientCache.set(nextKey, nextData);
-                prefetchImages(nextData.results);
-              })
-              .catch(() => {});
-          }
-        }
       })
       .catch(() => setShows([]))
       .finally(() => setLoading(false));
-  }, [page, sort, genreId]);
+  }, [page, sort, genreId, languageFilter, initialShows]);
 
-  const updateUrl = (newPage: number, newSort: string, newGenreId?: number) => {
+  const updateUrl = (newPage: number, newSort: string, newGenreId?: number, newLang: string = languageFilter) => {
     const params = new URLSearchParams();
     if (newSort && newSort !== 'popularity.desc') params.set('sort', newSort);
     if (newPage > 1) params.set('page', String(newPage));
     if (newGenreId) params.set('genre', String(newGenreId));
+    if (newLang && newLang !== 'all') params.set('lang', newLang);
 
     const qs = params.toString();
-    router.push(qs ? `/tv/browse?${qs}` : '/tv/browse', { scroll: false });
+    if (typeof window !== 'undefined') {
+      window.history.pushState(null, '', qs ? `/tv/browse?${qs}` : '/tv/browse');
+    }
+  };
+
+  const handleLanguageChange = (newLang: 'all' | 'en' | 'id') => {
+    setLanguageFilter(newLang);
+    setPage(1);
+    updateUrl(1, sort, genreId, newLang);
   };
 
   const handleSortChange = (newSort: string) => {
     setSort(newSort);
     setPage(1);
     setSortOpen(false);
-    updateUrl(1, newSort, genreId);
+    updateUrl(1, newSort, genreId, languageFilter);
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
+  const handleGenreSelect = (gId: number) => {
+    const localMatches = initialShows.filter((s) => s.genre_ids && s.genre_ids.includes(gId));
+    if (localMatches.length === 0) {
+      setGenreId(undefined);
+      setPage(1);
+      updateUrl(1, sort, undefined, languageFilter);
+      return;
+    }
+    setGenreId(gId);
+    setPage(1);
+    updateUrl(1, sort, gId, languageFilter);
+  };
+
+  const handleAllSelect = () => {
+    setGenreId(undefined);
+    setPage(1);
+    updateUrl(1, sort, undefined, languageFilter);
+  };
+
   const handlePageChange = (newPage: number) => {
     if (newPage === page || newPage < 1 || newPage > totalPages) return;
     setPage(newPage);
-    updateUrl(newPage, sort, genreId);
+    updateUrl(newPage, sort, genreId, languageFilter);
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   const currentSortLabel = SORT_OPTIONS.find((o) => o.value === sort)?.label || 'Sort';
+  const selectedGenreName = genres.find((g) => g.id === genreId)?.name;
 
   // Helper to build page numbers array with ellipsis
   const getPageNumbers = () => {
@@ -186,9 +234,9 @@ export default function TVBrowseClient({
     <div className="min-h-screen pt-20 sm:pt-24 pb-4 sm:pb-6" style={{ background: '#050816' }}>
       <div className="w-full px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 2xl:px-14">
         
-        {/* ── Page Header: Title on Left, Sort Dropdown on Right ── */}
+        {/* ── Page Header: Title on Left, Language & Sort Controls on Right ── */}
         <div className="mb-6 sm:mb-8">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
               <h1 className="text-xl sm:text-3xl md:text-4xl font-black truncate sm:whitespace-normal mb-1">
                 <span
@@ -203,54 +251,98 @@ export default function TVBrowseClient({
                 </span>
               </h1>
               <p className="text-xs sm:text-sm font-medium" style={{ color: '#94a3b8' }}>
-                Jelajahi <span className="text-pink-400 font-bold">{totalResults > 0 ? totalResults.toLocaleString() : '129'}</span> series untuk ditonton
+                Jelajahi <span className="text-pink-400 font-bold">{totalResults > 0 ? totalResults.toLocaleString() : '0'}</span> series untuk ditonton
               </p>
             </div>
 
-            {/* Sort Dropdown - pinned to top right */}
-            <div className="relative flex-shrink-0" ref={sortRef}>
-              <button
-                onClick={() => setSortOpen(!sortOpen)}
-                className="flex items-center gap-1.5 sm:gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200"
-                style={{
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: '#94a3b8',
-                }}
-              >
-                <SlidersHorizontal size={14} className="sm:w-[15px] sm:h-[15px] text-pink-400" />
-                <span className="whitespace-nowrap">{currentSortLabel}</span>
-                <ChevronRight
-                  size={13}
-                  className="transition-transform duration-200"
-                  style={{ transform: sortOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
-                />
-              </button>
+            {/* Right: Language Filter & Sort Controls */}
+            <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
+              {/* Language Filter Pills: All (default, left), EN, ID */}
+              <div className="flex items-center p-1 rounded-xl bg-white/[0.06] border border-white/10 text-xs font-bold shadow-sm">
+                <div className="flex items-center gap-1 px-2 text-slate-400 hidden xs:flex">
+                  <Globe size={13} />
+                  <span className="text-[11px] uppercase tracking-wider font-semibold">Bahasa:</span>
+                </div>
+                <button
+                  onClick={() => handleLanguageChange('all')}
+                  className={`px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
+                    languageFilter === 'all'
+                      ? 'bg-pink-500 text-white shadow-md shadow-pink-500/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Semua Bahasa"
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => handleLanguageChange('en')}
+                  className={`px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
+                    languageFilter === 'en'
+                      ? 'bg-pink-500 text-white shadow-md shadow-pink-500/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Bahasa Inggris (English)"
+                >
+                  EN
+                </button>
+                <button
+                  onClick={() => handleLanguageChange('id')}
+                  className={`px-3 py-1.5 rounded-lg transition-all text-xs font-bold ${
+                    languageFilter === 'id'
+                      ? 'bg-pink-500 text-white shadow-md shadow-pink-500/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Bahasa Indonesia"
+                >
+                  ID
+                </button>
+              </div>
 
-              {sortOpen && (
-                <div
-                  className="absolute right-0 top-full mt-2 w-44 sm:w-48 rounded-xl overflow-hidden z-30"
+              {/* Sort Dropdown */}
+              <div className="relative flex-shrink-0" ref={sortRef}>
+                <button
+                  onClick={() => setSortOpen(!sortOpen)}
+                  className="flex items-center gap-1.5 sm:gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200"
                   style={{
-                    background: '#0B1020',
-                    border: '1px solid rgba(236,72,153,0.3)',
-                    boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: '#94a3b8',
                   }}
                 >
-                  {SORT_OPTIONS.map((option) => (
-                    <button
-                      key={option.value}
-                      onClick={() => handleSortChange(option.value)}
-                      className="w-full px-3.5 py-2.5 sm:px-4 sm:py-3 text-left text-xs sm:text-sm transition-colors duration-150 hover:bg-white/5"
-                      style={{
-                        color: sort === option.value ? '#ec4899' : '#94a3b8',
-                        fontWeight: sort === option.value ? 600 : 400,
-                      }}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              )}
+                  <SlidersHorizontal size={14} className="sm:w-[15px] sm:h-[15px] text-pink-400" />
+                  <span className="whitespace-nowrap">{currentSortLabel}</span>
+                  <ChevronRight
+                    size={13}
+                    className="transition-transform duration-200"
+                    style={{ transform: sortOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
+                  />
+                </button>
+
+                {sortOpen && (
+                  <div
+                    className="absolute right-0 top-full mt-2 w-44 sm:w-48 rounded-xl overflow-hidden z-30"
+                    style={{
+                      background: '#0B1020',
+                      border: '1px solid rgba(236,72,153,0.3)',
+                      boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
+                    }}
+                  >
+                    {SORT_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        onClick={() => handleSortChange(option.value)}
+                        className="w-full px-3.5 py-2.5 sm:px-4 sm:py-3 text-left text-xs sm:text-sm transition-colors duration-150 hover:bg-white/5"
+                        style={{
+                          color: sort === option.value ? '#ec4899' : '#94a3b8',
+                          fontWeight: sort === option.value ? 600 : 400,
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -264,6 +356,8 @@ export default function TVBrowseClient({
               type="tv"
               allHref="/tv/browse"
               hideTitle={true}
+              onGenreSelect={handleGenreSelect}
+              onAllSelect={handleAllSelect}
             />
           </div>
         )}
@@ -282,11 +376,39 @@ export default function TVBrowseClient({
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <div className="p-6 rounded-full" style={{ background: 'rgba(255,255,255,0.04)' }}>
-              <Tv size={48} style={{ color: '#475569' }} />
+          <div className="flex flex-col items-center justify-center py-20 px-4 text-center bg-[#090e1f] rounded-2xl border border-white/5 max-w-2xl mx-auto my-8">
+            <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center text-slate-500 mb-4">
+              <Tv size={28} />
             </div>
-            <p className="text-neo-text-secondary text-lg">No TV series found.</p>
+            <h3 className="text-base sm:text-lg font-bold text-white mb-2">
+              Tidak Ada TV Series Ditemukan
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-400 mb-5 max-w-md">
+              Belum ada serial TV {languageFilter === 'en' ? 'Bahasa Inggris (EN)' : languageFilter === 'id' ? 'Bahasa Indonesia (ID)' : ''}{' '}
+              {selectedGenreName ? (
+                <>untuk genre <span className="text-white font-semibold">{selectedGenreName}</span></>
+              ) : null}{' '}
+              di database lokal.
+            </p>
+            <div className="flex items-center gap-3 flex-wrap justify-center">
+              {languageFilter !== 'all' && (
+                <button
+                  onClick={() => handleLanguageChange('all')}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 bg-pink-500 hover:bg-pink-400 text-white shadow-pink-500/20"
+                >
+                  <Globe size={14} />
+                  <span>Lihat Semua Bahasa (All)</span>
+                </button>
+              )}
+              {genreId && (
+                <button
+                  onClick={handleAllSelect}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white/10 hover:bg-white/20 text-white border border-white/10"
+                >
+                  <span>Lihat Semua Genre</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
 

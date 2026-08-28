@@ -497,8 +497,8 @@ export const EditModal: React.FC<EditModalProps> = ({
                   )}
                 </div>
 
-              {/* Rating, Featured, Duration, Subtitles */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Rating, Language, Weight, Subtitles, Duration */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-300 mb-1.5">
                     Rating (0 - 10)
@@ -515,6 +515,44 @@ export const EditModal: React.FC<EditModalProps> = ({
                   />
                 </div>
 
+                {editingItem.type !== 'tv_episode' && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                      Bahasa (Language)
+                    </label>
+                    <select
+                      value={editingItem.frontmatter.language || 'ID'}
+                      onChange={(e) => updateFrontmatter('language', e.target.value)}
+                      className="w-full px-3.5 py-2.5 sm:py-3 bg-black/50 border border-white/10 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-cyan-500 min-h-[42px]"
+                    >
+                      <option value="ID">ID - Indonesia</option>
+                      <option value="KR">KR - Korea (Drakor)</option>
+                      <option value="EN">EN - English (Barat)</option>
+                      <option value="JP">JP - Jepang (Anime)</option>
+                      <option value="TH">TH - Thailand</option>
+                      <option value="CN">CN - China / Mandarin</option>
+                    </select>
+                  </div>
+                )}
+
+                {editingItem.type !== 'tv_episode' && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                      Weight Prioritas
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="9999"
+                      value={editingItem.frontmatter.weight || ''}
+                      onChange={(e) => updateFrontmatter('weight', e.target.value ? Number(e.target.value) : undefined)}
+                      placeholder="Urutan (1, 2, ..)"
+                      className="w-full px-3.5 py-2.5 sm:py-3 bg-black/50 border border-white/10 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-cyan-500 min-h-[42px]"
+                      title="Angka lebih kecil = urutan lebih prioritas/paling depan di section"
+                    />
+                  </div>
+                )}
+
                 {editingItem.type === 'tv_episode' ? (
                   <div>
                     <label className="block text-xs font-bold text-slate-300 mb-1.5">
@@ -529,34 +567,48 @@ export const EditModal: React.FC<EditModalProps> = ({
                     />
                   </div>
                 ) : (
-                  <div className="flex items-center pt-2 sm:pt-6">
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(editingItem.frontmatter.featured)}
-                        onChange={(e) => updateFrontmatter('featured', e.target.checked)}
-                        className="w-4 h-4 rounded text-cyan-500 focus:ring-cyan-500 bg-black/50 border-white/20"
-                      />
-                      <span className="text-xs sm:text-sm font-bold text-amber-300 flex items-center gap-1">
-                        <Star size={14} fill="currentColor" /> Featured di Hero
-                      </span>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                      Subtitles URL
                     </label>
+                    <input
+                      type="text"
+                      value={editingItem.frontmatter.subtitles || ''}
+                      onChange={(e) => updateFrontmatter('subtitles', e.target.value)}
+                      placeholder="https://server.com/sub.vtt"
+                      className="w-full px-3.5 py-2.5 sm:py-3 bg-black/50 border border-white/10 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-cyan-500 font-mono min-h-[42px]"
+                    />
                   </div>
                 )}
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                    Subtitles URL
-                  </label>
-                  <input
-                    type="text"
-                    value={editingItem.frontmatter.subtitles || ''}
-                    onChange={(e) => updateFrontmatter('subtitles', e.target.value)}
-                    placeholder="https://server.com/sub.vtt"
-                    className="w-full px-3.5 py-2.5 sm:py-3 bg-black/50 border border-white/10 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-cyan-500 font-mono min-h-[42px]"
-                  />
-                </div>
               </div>
+
+              {/* Featured & Trending Toggles (Movies & TV Series) */}
+              {editingItem.type !== 'tv_episode' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-black/30 border border-white/5 rounded-xl">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(editingItem.frontmatter.featured)}
+                      onChange={(e) => updateFrontmatter('featured', e.target.checked)}
+                      className="w-4 h-4 rounded text-cyan-500 focus:ring-cyan-500 bg-black/50 border-white/20"
+                    />
+                    <span className="text-xs sm:text-sm font-bold text-amber-300 flex items-center gap-1">
+                      <Star size={14} fill="currentColor" /> Featured Hero Carousel
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(editingItem.frontmatter.trending)}
+                      onChange={(e) => updateFrontmatter('trending', e.target.checked)}
+                      className="w-4 h-4 rounded text-rose-500 focus:ring-rose-500 bg-black/50 border-white/20"
+                    />
+                    <span className="text-xs sm:text-sm font-bold text-rose-400 flex items-center gap-1">
+                      🔥 Trending Section (Home)
+                    </span>
+                  </label>
+                </div>
+              )}
 
               {/* Deskripsi */}
               <div>

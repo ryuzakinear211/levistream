@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Film, Plus, ExternalLink, Edit2, Trash2, Star, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Film, Plus, ExternalLink, Edit2, Trash2, Star, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { MovieItem } from '../types';
 import { getMovieUrl } from '@/lib/urls';
 
@@ -18,6 +18,8 @@ interface MovieListViewProps {
   onDelete: (relativePath: string, title: string) => void;
   selectedPaths: string[];
   onToggleSelect: (path: string) => void;
+  onSelectAll?: (paths: string[]) => void;
+  onClearSelection?: () => void;
 }
 
 function MovieCardSkeleton() {
@@ -84,8 +86,10 @@ export const MovieListView: React.FC<MovieListViewProps> = ({
   onDelete,
   selectedPaths,
   onToggleSelect,
+  onSelectAll,
+  onClearSelection,
 }) => {
-  if (pageLoading) {
+  if (pageLoading && movies.length === 0) {
     return (
       <div className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
@@ -118,14 +122,48 @@ export const MovieListView: React.FC<MovieListViewProps> = ({
     );
   }
 
+  const allVisiblePaths = movies.map((m) => m.relativePath);
+  const isAllCurrentSelected = allVisiblePaths.length > 0 && allVisiblePaths.every((p) => selectedPaths.includes(p));
+
+  const handleToggleSelectAll = () => {
+    if (isAllCurrentSelected) {
+      if (onClearSelection) onClearSelection();
+    } else {
+      if (onSelectAll) onSelectAll(Array.from(new Set([...selectedPaths, ...allVisiblePaths])));
+    }
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3.5">
+      {/* Select All & Summary Header */}
+      <div className="flex items-center justify-between px-1.5 py-1">
+        <div
+          onClick={handleToggleSelectAll}
+          className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-300 hover:text-white transition-colors"
+        >
+          <div
+            className={`w-4 h-4 rounded flex items-center justify-center transition-all ${
+              isAllCurrentSelected
+                ? 'bg-cyan-500 text-black shadow-sm'
+                : 'bg-black/50 border border-white/30 hover:border-cyan-400 text-transparent'
+            }`}
+          >
+            <Check size={11} strokeWidth={3} className={isAllCurrentSelected ? 'opacity-100' : 'opacity-0'} />
+          </div>
+          <span>Pilih Semua di Halaman Ini ({movies.length})</span>
+        </div>
+        <span className="text-xs text-slate-400">
+          Total <span className="text-cyan-400 font-bold">{totalMoviesCount}</span> movies
+        </span>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
         {movies.map((movie) => {
           const title = movie.displayTitle || movie.frontmatter.title || movie.slug;
           const tmdbId = movie.frontmatter.tmdb_id;
           const poster = movie.posterUrl || movie.frontmatter.image_url || movie.frontmatter.poster_path;
           const isFeatured = Boolean(movie.frontmatter.featured);
+          const weight = movie.frontmatter.weight;
           const rating = movie.rating || movie.frontmatter.rating;
           const isSelected = selectedPaths.includes(movie.relativePath);
 
@@ -140,6 +178,24 @@ export const MovieListView: React.FC<MovieListViewProps> = ({
             >
               <div>
                 <div className="flex items-start gap-3 mb-2.5">
+                  {/* Clean Selector Checkbox */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleSelect(movie.relativePath);
+                    }}
+                    className={`w-5 h-5 rounded-md flex items-center justify-center transition-all flex-shrink-0 mt-0.5 ${
+                      isSelected
+                        ? 'bg-cyan-500 text-black shadow-md shadow-cyan-500/40 ring-2 ring-cyan-400/40'
+                        : 'bg-black/50 border border-white/20 hover:border-cyan-400 text-transparent'
+                    }`}
+                    title={isSelected ? 'Batalkan pilihan' : 'Pilih film ini'}
+                  >
+                    <Check size={12} strokeWidth={3} className={isSelected ? 'opacity-100' : 'opacity-0'} />
+                  </button>
+
+                  {/* Poster Thumbnail */}
                   <div
                     onClick={() => onToggleSelect(movie.relativePath)}
                     className="relative w-16 sm:w-20 aspect-[2/3] min-h-[96px] sm:min-h-[120px] rounded-lg sm:rounded-xl overflow-hidden bg-slate-900 flex-shrink-0 border border-white/15 shadow-md cursor-pointer"
@@ -152,6 +208,19 @@ export const MovieListView: React.FC<MovieListViewProps> = ({
                       <span className="px-2 py-0.5 rounded-md text-[9.5px] sm:text-[10px] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
                         TMDB {tmdbId || 'N/A'}
                       </span>
+                      <span className="px-1.5 py-0.5 rounded-md text-[9.5px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                        {String(movie.frontmatter.language || 'ID').toUpperCase()}
+                      </span>
+                      {weight !== undefined && weight !== null && (
+                        <span className="px-1.5 py-0.5 rounded-md text-[9.5px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30" title="Prioritas Weight">
+                          W: {weight}
+                        </span>
+                      )}
+                      {Boolean(movie.frontmatter.trending) && (
+                        <span className="px-1.5 py-0.5 rounded-md text-[9.5px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                          Trending
+                        </span>
+                      )}
                       {isFeatured && (
                         <span className="px-2 py-0.5 rounded-md text-[9.5px] sm:text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
                           <Star size={10} fill="currentColor" /> Featured

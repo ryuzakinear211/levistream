@@ -171,7 +171,8 @@ export async function searchMulti(query: string, page: number = 1): Promise<TMDB
 export async function discoverMovies(
   page: number = 1,
   sortBy: string = 'popularity.desc',
-  genreId?: number
+  genreId?: number,
+  withOriginalLanguage?: string
 ): Promise<TMDBResponse<Movie>> {
   // Normalize sort_by for Movies
   let normalizedSort = sortBy;
@@ -184,6 +185,9 @@ export async function discoverMovies(
   };
   if (genreId) {
     params.with_genres = String(genreId);
+  }
+  if (withOriginalLanguage) {
+    params.with_original_language = withOriginalLanguage.toLowerCase();
   }
   return fetchTMDB<TMDBResponse<Movie>>('/discover/movie', params);
 }
@@ -243,7 +247,8 @@ export async function getTVShowsByGenre(
 export async function discoverTVShows(
   page: number = 1,
   sortBy: string = 'popularity.desc',
-  genreId?: number
+  genreId?: number,
+  withOriginalLanguage?: string
 ): Promise<TMDBResponse<TVShow>> {
   // Normalize sort_by for TV shows (TMDB /discover/tv uses first_air_date, not release_date)
   let normalizedSort = sortBy;
@@ -257,6 +262,9 @@ export async function discoverTVShows(
   };
   if (genreId) {
     params.with_genres = String(genreId);
+  }
+  if (withOriginalLanguage) {
+    params.with_original_language = withOriginalLanguage.toLowerCase();
   }
   return fetchTMDB<TMDBResponse<TVShow>>('/discover/tv', params);
 }

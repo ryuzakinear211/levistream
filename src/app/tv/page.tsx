@@ -3,16 +3,9 @@ import type { Metadata } from 'next';
 import Hero from '@/components/Hero';
 import MovieRow from '@/components/MovieRow';
 import GenreFilter from '@/components/GenreFilter';
-import {
-  getTrendingTV,
-  getPopularTV,
-  getTopRatedTV,
-  getAiringTodayTV,
-  getTVGenres,
-  getGenres,
-} from '@/lib/tmdb';
+import { getTVGenres, getGenres } from '@/lib/tmdb';
 import { getEnrichedFeaturedTV } from '@/lib/featured';
-import { getAllCustomTVShowsForList } from '@/lib/markdownTV';
+import { getResolvedSections } from '@/lib/sections';
 import siteConfig from '@/config';
 
 export const metadata: Metadata = {
@@ -23,42 +16,13 @@ export const metadata: Metadata = {
 export const revalidate = 60;
 
 export default async function TVPage() {
-  const [
-    trendingData,
-    popularData,
-    topRatedData,
-    airingData,
-    genresData,
-    customFeaturedData,
-    customTVListData,
-  ] = await Promise.allSettled([
-    getTrendingTV('week'),
-    getPopularTV(1),
-    getTopRatedTV(1),
-    getAiringTodayTV(1),
-    getTVGenres().catch(() => getGenres()),
-    getEnrichedFeaturedTV({ maxItems: 6 }),
-    getAllCustomTVShowsForList(),
+  const [genresData, customFeaturedShows, sections] = await Promise.all([
+    getTVGenres().catch(() => getGenres()).catch(() => []),
+    getEnrichedFeaturedTV({ maxItems: siteConfig.featuredLimit || 7 }),
+    getResolvedSections('tv'),
   ]);
 
-  const trending = trendingData.status === 'fulfilled' ? trendingData.value.results : [];
-  const popular = popularData.status === 'fulfilled' ? popularData.value.results : [];
-  const topRated = topRatedData.status === 'fulfilled' ? topRatedData.value.results : [];
-  const airingToday = airingData.status === 'fulfilled' ? airingData.value.results : [];
-  const genreList = genresData.status === 'fulfilled' ? genresData.value : [];
-  const customFeaturedShows = customFeaturedData.status === 'fulfilled' ? customFeaturedData.value : [];
-  const customTVList = customTVListData.status === 'fulfilled' ? customTVListData.value : [];
-
-  const mergedTrending = [
-    ...customTVList,
-    ...trending.filter((t: any) => !customTVList.some((ct: any) => ct.id === t.id || ct.customSlug === String(t.id))),
-  ];
-  const mergedRecentlyAdded = [
-    ...customTVList,
-    ...airingToday.filter((t: any) => !customTVList.some((ct: any) => ct.id === t.id || ct.customSlug === String(t.id))),
-  ];
-
-  const featuredShow = trending[0] || popular[0];
+  const genreList = genresData || [];
 
   return (
     <div className="min-h-screen" style={{ background: '#050816' }}>
@@ -86,45 +50,18 @@ export default async function TVPage() {
           </section>
         )}
 
-        {/* Trending TV (no see all) */}
-        {mergedTrending.length > 0 && (
+        {/* Dynamic TV Sections ordered by weight */}
+        {sections.map((section) => (
           <MovieRow
-            title={siteConfig.tvSections?.trending || 'Trending This Week'}
-            items={mergedTrending}
+            key={section.id}
+            title={section.title}
+            items={section.items}
             type="tv"
+            seeAllHref={section.seeAllHref}
           />
-        )}
-
-        {/* Recently Added Series */}
-        {mergedRecentlyAdded.length > 0 && (
-          <MovieRow
-            title={siteConfig.tvSections?.recentlyAdded || 'Recently Added'}
-            items={mergedRecentlyAdded}
-            seeAllHref="/tv/browse?sort=first_air_date.desc"
-            type="tv"
-          />
-        )}
-
-        {/* Popular TV */}
-        {popular.length > 0 && (
-          <MovieRow
-            title={siteConfig.tvSections?.popular || 'Popular TV Shows'}
-            items={popular}
-            seeAllHref="/tv/browse?sort=popularity.desc"
-            type="tv"
-          />
-        )}
-
-        {/* Top Rated TV */}
-        {topRated.length > 0 && (
-          <MovieRow
-            title={siteConfig.tvSections?.topRated || 'Top Rated Series'}
-            items={topRated}
-            seeAllHref="/tv/browse?sort=vote_average.desc"
-            type="tv"
-          />
-        )}
+        ))}
       </div>
     </div>
   );
 }
+

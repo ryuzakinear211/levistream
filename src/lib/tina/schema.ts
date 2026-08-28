@@ -13,6 +13,9 @@ export interface TinaMovieFrontmatter {
   image_url?: string;
   rating?: number | string;
   featured?: boolean;
+  trending?: boolean;
+  language?: string; // e.g. 'ID', 'KR', 'EN'
+  weight?: number; // Sorting priority (smaller = first)
   subtitles?: string;
   [key: string]: any;
 }
@@ -24,6 +27,9 @@ export interface TinaTVShowFrontmatter {
   image_url?: string;
   rating?: number | string;
   featured?: boolean;
+  trending?: boolean;
+  language?: string; // e.g. 'ID', 'KR', 'EN'
+  weight?: number; // Sorting priority (smaller = first)
   [key: string]: any;
 }
 
@@ -65,6 +71,15 @@ export function serializeTinaMovie(
   if (frontmatter.featured !== undefined) {
     cleanData.featured = Boolean(frontmatter.featured);
   }
+  if (frontmatter.trending !== undefined) {
+    cleanData.trending = Boolean(frontmatter.trending);
+  }
+  if (frontmatter.language && String(frontmatter.language).trim()) {
+    cleanData.language = String(frontmatter.language).trim().toUpperCase();
+  }
+  if (frontmatter.weight !== undefined && frontmatter.weight !== null && frontmatter.weight !== '') {
+    cleanData.weight = Number(frontmatter.weight);
+  }
   if (frontmatter.subtitles && String(frontmatter.subtitles).trim()) {
     cleanData.subtitles = String(frontmatter.subtitles).trim();
   }
@@ -104,6 +119,15 @@ export function serializeTinaTVShow(
   }
   if (frontmatter.featured !== undefined) {
     cleanData.featured = Boolean(frontmatter.featured);
+  }
+  if (frontmatter.trending !== undefined) {
+    cleanData.trending = Boolean(frontmatter.trending);
+  }
+  if (frontmatter.language && String(frontmatter.language).trim()) {
+    cleanData.language = String(frontmatter.language).trim().toUpperCase();
+  }
+  if (frontmatter.weight !== undefined && frontmatter.weight !== null && frontmatter.weight !== '') {
+    cleanData.weight = Number(frontmatter.weight);
   }
 
   for (const [k, v] of Object.entries(frontmatter)) {

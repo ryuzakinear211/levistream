@@ -1,30 +1,33 @@
 import React from 'react';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import {
-  getMoviesByGenre,
-  getTVShowsByGenre,
   getGenres,
   getTVGenres,
   getGenreById,
   getTVGenreById,
 } from '@/lib/tmdb';
+import { getAllCustomMoviesForList } from '@/lib/markdownMovies';
+import { getAllCustomTVShowsForList } from '@/lib/markdownTV';
 import GenrePageClient from './GenrePageClient';
 import siteConfig from '@/config';
 
 interface PageProps {
   params: { id: string };
-  searchParams: { page?: string; sort?: string; type?: string };
+  searchParams: { page?: string; sort?: string; type?: string; lang?: string };
 }
 
 export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const isTV = searchParams.type === 'tv';
-  const genreId = Number(params.id);
-  const genre = isTV
+  const isAll = params.id.toLowerCase() === 'all';
+  const genreId = isAll ? 0 : Number(params.id);
+  const genre = isAll
+    ? { id: 0, name: 'All' }
+    : isTV
     ? await getTVGenreById(genreId).catch(() => null)
     : await getGenreById(genreId).catch(() => null);
 
-  const mediaLabel = isTV ? 'TV Shows' : 'Movies';
+  const mediaLabel = isTV ? 'TV Series' : 'Movies';
 
   return {
     title: genre ? `${genre.name} ${mediaLabel} - ${siteConfig.name}` : `Genre - ${siteConfig.name}`,
@@ -34,33 +37,33 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   };
 }
 
-export const revalidate = 3600;
+export const revalidate = 15;
 
 export default async function GenrePage({ params, searchParams }: PageProps) {
-  const genreId = Number(params.id);
-  if (isNaN(genreId)) notFound();
-
   const isTV = searchParams.type === 'tv';
+  const isAll = params.id.toLowerCase() === 'all';
+  const genreId = isAll ? 0 : Number(params.id);
+  if (!isAll && isNaN(genreId)) notFound();
+
   const page = Number(searchParams.page) || 1;
   const sort = searchParams.sort || 'popularity.desc';
+  const initialLang = (searchParams.lang || 'all').toLowerCase();
 
-  const [genreData, itemsData, allGenres] = await Promise.allSettled([
-    isTV ? getTVGenreById(genreId) : getGenreById(genreId),
-    isTV ? getTVShowsByGenre(genreId, page, sort) : getMoviesByGenre(genreId, page, sort),
+  const [genreData, localItemsData, allGenres] = await Promise.allSettled([
+    !isAll ? (isTV ? getTVGenreById(genreId) : getGenreById(genreId)) : Promise.resolve({ id: 0, name: 'All' }),
+    isTV ? getAllCustomTVShowsForList() : getAllCustomMoviesForList(),
     isTV ? getTVGenres().catch(() => getGenres()) : getGenres(),
   ]);
 
-  const genre =
-    genreData.status === 'fulfilled' && genreData.value
-      ? genreData.value
-      : isTV
-      ? await getGenreById(genreId).catch(() => null)
-      : null;
+  const genre = isAll
+    ? { id: 0, name: 'All' }
+    : genreData.status === 'fulfilled' && genreData.value
+    ? genreData.value
+    : isTV
+    ? await getGenreById(genreId).catch(() => null)
+    : null;
 
-  const items =
-    itemsData.status === 'fulfilled'
-      ? itemsData.value
-      : { results: [], total_pages: 0, total_results: 0, page: 1 };
+  const rawLocalItems = localItemsData.status === 'fulfilled' ? localItemsData.value : [];
   const genres = allGenres.status === 'fulfilled' ? allGenres.value : [];
 
   if (!genre) notFound();
@@ -68,12 +71,11 @@ export default async function GenrePage({ params, searchParams }: PageProps) {
   return (
     <GenrePageClient
       genre={genre}
-      initialItems={items.results as any}
-      totalPages={Math.min(items.total_pages, 500)}
-      totalResults={items.total_results}
+      initialGenreId={isAll ? null : genreId}
+      allLocalItems={rawLocalItems}
       initialPage={page}
       initialSort={sort}
-      genreId={genreId}
+      initialLanguage={initialLang === 'id' ? 'id' : initialLang === 'en' ? 'en' : 'all'}
       allGenres={genres}
       type={isTV ? 'tv' : 'movie'}
     />

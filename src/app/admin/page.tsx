@@ -43,6 +43,12 @@ export default function AdminPage() {
         setActiveTab={admin.setActiveTab}
         searchQuery={admin.searchQuery}
         setSearchQuery={admin.setSearchQuery}
+        sortOrder={admin.sortOrder}
+        setSortOrder={admin.setSortOrder}
+        filterLanguage={admin.filterLanguage}
+        setFilterLanguage={admin.setFilterLanguage}
+        filterStatus={admin.filterStatus}
+        setFilterStatus={admin.setFilterStatus}
         moviesCount={admin.totalAllMoviesCount}
         tvShowsCount={admin.totalAllTvShowsCount}
         totalEpisodesCount={admin.totalEpisodesCount}
@@ -67,6 +73,7 @@ export default function AdminPage() {
             count: admin.selectedBatchPaths.length,
           });
         }}
+        onClearSelection={admin.clearSelection}
         onManualSyncGitHub={admin.handleManualSyncToGitHub}
         syncingGitHub={admin.syncingGitHub}
       />
@@ -104,6 +111,8 @@ export default function AdminPage() {
           }}
           selectedPaths={admin.selectedBatchPaths}
           onToggleSelect={admin.toggleBatchSelect}
+          onSelectAll={admin.selectAll}
+          onClearSelection={admin.clearSelection}
         />
       ) : (
         <TVListView
@@ -146,6 +155,10 @@ export default function AdminPage() {
             admin.setCreateContentType('tv_episode');
             admin.setIsCreateModalOpen(true);
           }}
+          selectedPaths={admin.selectedBatchPaths}
+          onToggleSelect={admin.toggleBatchSelect}
+          onSelectAll={admin.selectAll}
+          onClearSelection={admin.clearSelection}
         />
       )}
 

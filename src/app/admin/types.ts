@@ -56,6 +56,7 @@ export interface TMDBPreviewData {
   year: number | null;
   rating: number | null;
   genres: string[];
+  originalLanguage?: string;
   backdrops?: TMDBBackdropImage[];
 }
 

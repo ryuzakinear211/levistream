@@ -13,6 +13,7 @@ import {
   Play,
   Film,
   Star,
+  Check,
 } from 'lucide-react';
 import { TVShowItem, TVEpisodeItem } from '../types';
 import { getTVUrl } from '@/lib/urls';
@@ -31,6 +32,10 @@ interface TVListViewProps {
   onDeleteShow: (path: string, title: string) => void;
   onDeleteEpisode: (path: string, title: string) => void;
   onQuickAddEpisode: (show: TVShowItem, seasonSlug: string) => void;
+  selectedPaths?: string[];
+  onToggleSelect?: (path: string) => void;
+  onSelectAll?: (paths: string[]) => void;
+  onClearSelection?: () => void;
 }
 
 function TVCardSkeleton() {
@@ -109,6 +114,10 @@ export const TVListView: React.FC<TVListViewProps> = ({
   onDeleteShow,
   onDeleteEpisode,
   onQuickAddEpisode,
+  selectedPaths = [],
+  onToggleSelect,
+  onSelectAll,
+  onClearSelection,
 }) => {
   const [expandedSeasons, setExpandedSeasons] = useState<Record<string, boolean>>({});
   const [seasonPages, setSeasonPages] = useState<Record<string, number>>({});
@@ -129,16 +138,17 @@ export const TVListView: React.FC<TVListViewProps> = ({
     return isFirst;
   };
 
-  const getShowSeasons = (show: TVShowItem): string[] => {
-    const sSet = new Set<string>();
+  const getShowSeasons = (show: TVShowItem) => {
+    const seasonsSet = new Set<string>();
     show.episodes.forEach((ep) => {
-      sSet.add((ep.seasonFolder || 's1').toLowerCase());
+      if (ep.seasonFolder) seasonsSet.add(ep.seasonFolder.toLowerCase());
     });
-    return Array.from(sSet).sort((a, b) => {
+    const sorted = Array.from(seasonsSet).sort((a, b) => {
       const numA = parseInt(a.replace(/\D/g, ''), 10) || 0;
       const numB = parseInt(b.replace(/\D/g, ''), 10) || 0;
       return numA - numB;
     });
+    return sorted.length > 0 ? sorted : ['s1'];
   };
 
   const formatSeasonLabel = (seasonSlug: string) => {
@@ -156,9 +166,9 @@ export const TVListView: React.FC<TVListViewProps> = ({
     return match ? match[1] : slug;
   };
 
-  if (pageLoading) {
+  if (pageLoading && tvShows.length === 0) {
     return (
-      <div className="space-y-3.5 w-full">
+      <div className="space-y-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <TVCardSkeleton key={i} />
         ))}
@@ -187,25 +197,85 @@ export const TVListView: React.FC<TVListViewProps> = ({
     );
   }
 
+  const allVisiblePaths = tvShows.map((s) => s.relativePath);
+  const isAllCurrentSelected = allVisiblePaths.length > 0 && allVisiblePaths.every((p) => selectedPaths.includes(p));
+
+  const handleToggleSelectAll = () => {
+    if (isAllCurrentSelected) {
+      if (onClearSelection) onClearSelection();
+    } else {
+      if (onSelectAll) onSelectAll(Array.from(new Set([...selectedPaths, ...allVisiblePaths])));
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {/* Select All & Summary Header */}
+      <div className="flex items-center justify-between px-1.5 py-1">
+        <div
+          onClick={handleToggleSelectAll}
+          className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-300 hover:text-white transition-colors"
+        >
+          <div
+            className={`w-4 h-4 rounded flex items-center justify-center transition-all ${
+              isAllCurrentSelected
+                ? 'bg-pink-500 text-white shadow-sm'
+                : 'bg-black/50 border border-white/30 hover:border-pink-400 text-transparent'
+            }`}
+          >
+            <Check size={11} strokeWidth={3} className={isAllCurrentSelected ? 'opacity-100' : 'opacity-0'} />
+          </div>
+          <span>Pilih Semua di Halaman Ini ({tvShows.length})</span>
+        </div>
+        <span className="text-xs text-slate-400">
+          Total <span className="text-pink-400 font-bold">{totalShowsCount}</span> serial TV
+        </span>
+      </div>
+
       <div className="space-y-3.5 w-full">
         {tvShows.map((show) => {
           const title = show.displayTitle || show.frontmatter.title || show.showSlug;
           const tmdbId = show.frontmatter.tmdb_id;
           const poster = show.posterUrl || show.frontmatter.image_url;
           const year = show.year;
+          const weight = show.frontmatter.weight;
           const showSeasons = getShowSeasons(show);
+          const isSelected = selectedPaths.includes(show.relativePath);
 
           return (
             <div
               key={show.showSlug}
-              className="p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-[#0c1224] border border-white/10 hover:border-pink-500/40 transition-all shadow-sm w-full space-y-3"
+              className={`p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-[#0c1224] border transition-all shadow-sm w-full space-y-3 ${
+                isSelected
+                  ? 'border-pink-400 bg-[#190d24]'
+                  : 'border-white/10 hover:border-pink-500/40'
+              }`}
             >
               {/* Show Main Header - Mobile Responsive */}
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-white/10 w-full">
                 <div className="flex items-start sm:items-center gap-2.5">
-                  <div className="relative w-12 sm:w-14 aspect-[2/3] min-h-[72px] sm:min-h-[84px] rounded-lg overflow-hidden bg-slate-900 flex-shrink-0 border border-white/10 shadow-sm">
+                  {/* Clean Selector Checkbox */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onToggleSelect) onToggleSelect(show.relativePath);
+                    }}
+                    className={`w-5 h-5 rounded-md flex items-center justify-center transition-all flex-shrink-0 mt-1 sm:mt-0 ${
+                      isSelected
+                        ? 'bg-pink-500 text-white shadow-md shadow-pink-500/40 ring-2 ring-pink-400/40'
+                        : 'bg-black/50 border border-white/20 hover:border-pink-400 text-transparent'
+                    }`}
+                    title={isSelected ? 'Batalkan pilihan' : 'Pilih serial ini'}
+                  >
+                    <Check size={12} strokeWidth={3} className={isSelected ? 'opacity-100' : 'opacity-0'} />
+                  </button>
+
+                  {/* Poster Thumbnail */}
+                  <div
+                    onClick={() => onToggleSelect && onToggleSelect(show.relativePath)}
+                    className="relative w-12 sm:w-14 aspect-[2/3] min-h-[72px] sm:min-h-[84px] rounded-lg overflow-hidden bg-slate-900 flex-shrink-0 border border-white/10 shadow-sm cursor-pointer"
+                  >
                     <SafeAdminImage src={poster} alt={title} sizes="56px" />
                   </div>
 
@@ -214,6 +284,19 @@ export const TVListView: React.FC<TVListViewProps> = ({
                       <span className="px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-pink-500/10 text-pink-400 border border-pink-500/30">
                         TMDB {tmdbId}
                       </span>
+                      <span className="px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                        {String(show.frontmatter.language || 'ID').toUpperCase()}
+                      </span>
+                      {weight !== undefined && weight !== null && (
+                        <span className="px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30" title="Prioritas Weight">
+                          W: {weight}
+                        </span>
+                      )}
+                      {Boolean(show.frontmatter.trending) && (
+                        <span className="px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                          Trending
+                        </span>
+                      )}
                       {Boolean(show.frontmatter.featured) && (
                         <span className="px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
                           <Star size={10} fill="currentColor" /> Featured
