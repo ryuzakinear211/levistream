@@ -1,6 +1,7 @@
 ---
 tmdb_id: 969681
-videourl: 'https://levistream.vercel.app/admin'
+videourl: >-
+  https://huggingface.co/buckets/runarta/storage/resolve/Spider-Man.Brand.New.Day.2026.1080P.Amzn.Web-Dl.Ddp5.1.Atmos.H.264-Byndr.mp4
 title: 'Spider-Man: Brand New Day'
 deskripsi: >-
   Empat tahun setelah peristiwa Spider-Man: No Way Home, Peter Parker sudah
@@ -11,8 +12,9 @@ deskripsi: >-
   apa yang akan datang, Spider-Man tidak hanya harus berada dalam kondisi fisik
   dan mental terbaiknya, tetapi juga harus siap menghadapi konsekuensi dari masa
   lalunya!
-image_url: 'https://image.tmdb.org/t/p/w1280/Vcp2tLZl7ge14Q06UzGk5TOgqy.jpg'
+image_url: 'https://image.tmdb.org/t/p/w1280/f9mM7tDrZ3LlHPQu9I5A6TTxTb9.jpg'
 rating: 7.9
 featured: true
+trending: true
 ---
 
